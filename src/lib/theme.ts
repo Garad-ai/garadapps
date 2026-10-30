@@ -1,8 +1,8 @@
 import { useColorScheme } from 'react-native';
 
-// Mirrors the Chat Pro web tokens in Garad_ai/frontend/src/index.css.
+// Mirrors Chat Pro's app-mode tokens in Garad_ai/frontend/src/index.css (data-shell="app").
 const light = {
-  background: '#f8f8f6',
+  background: '#faf9f5',
   surface: '#f6f6f3',
   surfaceStrong: '#ecece8',
   text: '#1d2421',
@@ -18,7 +18,7 @@ const light = {
 };
 
 const dark: typeof light = {
-  background: '#111513',
+  background: '#262624',
   surface: '#181d1b',
   surfaceStrong: '#202622',
   text: '#edf0ed',

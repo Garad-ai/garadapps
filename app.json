@@ -22,7 +22,7 @@
       "package": "ai.garad.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#F8F8F6",
+        "backgroundColor": "#FAF9F5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -50,10 +50,10 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#f8f8f6",
+          "backgroundColor": "#faf9f5",
           "dark": {
             "image": "./assets/images/splash-icon.png",
-            "backgroundColor": "#111513"
+            "backgroundColor": "#262624"
           }
         }
       ],
