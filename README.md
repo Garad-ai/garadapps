@@ -29,6 +29,7 @@ What the native shell adds:
 | Admin control | Reads Admin › Settings › Mobile App (`/api/mobile-app/config`): forced or optional updates, maintenance screen, announcement banner, menu links |
 | App menu | "Garad app" in the Chat Pro sidebar opens a native sheet: Talk to Garad, plans, help, WhatsApp, email, privacy, terms, check for updates, version |
 | Talk to Garad | Long-press the app icon (Android) or open `garadai://voice` to start Garad Voice straight away; Voice can see the camera (and the screen on desktop browsers) |
+| Voice actions | In Garad Voice, ask Garad to open an app (WhatsApp, Facebook, TikTok, YouTube, Maps…), open a website, call a number, prepare a WhatsApp or SMS message, or start directions (`src/lib/agentActions.ts`). Calls and messages open ready; the user presses call or send |
 | Offline screen | Shown when the site can't be reached, with a retry button |
 | App mode | The user agent ends with `GaradApp/<version>`; Chat Pro then switches to app mode (no pinch or focus zoom, no tap highlights or shortcut hints) |
 | Theme sync | Chat Pro reports its background colour, so the status bar and safe areas follow the user's light/dark theme |
@@ -54,6 +55,7 @@ polish ships with normal web deploys. The site and start page are set in `app.js
 src/app/index.tsx      the web shell (WebView, back button, links, offline screen)
 src/lib/config.ts      site URL, start page, allowed domains, user agent
 src/lib/bridge.ts      injected script + native handlers for downloads, clipboard and read aloud
+src/lib/agentActions.ts phone actions requested by Garad Voice
 src/lib/remoteConfig.ts admin settings for updates, maintenance, announcement and links
 src/components/        app menu, banners, full-screen notices
 plugins/withVoiceShortcut.js  Android "Talk to Garad" launcher shortcut

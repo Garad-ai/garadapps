@@ -11,6 +11,7 @@ import type { FileDownloadEvent, ShouldStartLoadRequest } from 'react-native-web
 import { AppMenu } from '@/components/AppMenu';
 import { Banner } from '@/components/Banner';
 import { BlockingScreen } from '@/components/BlockingScreen';
+import { runAgentAction } from '@/lib/agentActions';
 import { BRIDGE_SCRIPT, copyText, saveDownload, speak, stopSpeaking } from '@/lib/bridge';
 import { APP_USER_AGENT, isSiteUrl, START_URL } from '@/lib/config';
 import { APP_VERSION, AppConfig, fetchAppConfig, updateStatus, updateUrl } from '@/lib/remoteConfig';
@@ -121,6 +122,17 @@ export default function GaradApp() {
     }
     if (message.type === 'theme' && typeof message.background === 'string') {
       setPageTheme({ background: message.background, dark: message.dark === true });
+    } else if (message.type === 'agentAction' && typeof message.id === 'string' && typeof message.name === 'string') {
+      // A phone action requested by Garad Voice; the result goes back to the page.
+      const id = message.id;
+      const args = message.args && typeof message.args === 'object' ? (message.args as Record<string, unknown>) : {};
+      runAgentAction(message.name, args)
+        .catch(() => ({ ok: false, message: 'The action failed on the phone.' }))
+        .then((result) =>
+          webView.current?.injectJavaScript(
+            `window.__garadAgentResult && window.__garadAgentResult(${JSON.stringify(id)}, ${JSON.stringify(result)}); true;`
+          )
+        );
     } else if (message.type === 'openAppMenu') {
       setUpdateNote(null);
       setMenuOpen(true);
