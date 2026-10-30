@@ -23,6 +23,9 @@ What the native shell adds:
 | Swipe back, pull to refresh (iOS) | Native gestures |
 | Uploads, camera, microphone | File inputs, photo capture and voice work inside the site |
 | External links | Other websites open in the in-app browser; `mailto:`/`tel:` open the system app |
+| Downloads | Documents, images, videos and exports Chat Pro creates (including `blob:`/`data:` files a WebView can't save) open in the share sheet to save or send; files on other domains open in the browser |
+| Copy | `navigator.clipboard.writeText` goes to the native clipboard |
+| Read aloud | Android WebView has no `speechSynthesis`; the bridge reads replies with the phone's voice (`expo-speech`) |
 | Offline screen | Shown when the site can't be reached, with a retry button |
 | App mode | The user agent ends with `GaradApp/<version>`; Chat Pro then switches to app mode (no pinch or focus zoom, no tap highlights or shortcut hints) |
 | Theme sync | Chat Pro reports its background colour, so the status bar and safe areas follow the user's light/dark theme |
@@ -47,6 +50,7 @@ polish ships with normal web deploys. The site and start page are set in `app.js
 ```text
 src/app/index.tsx      the web shell (WebView, back button, links, offline screen)
 src/lib/config.ts      site URL, start page, allowed domains, user agent
+src/lib/bridge.ts      injected script + native handlers for downloads, clipboard and read aloud
 plugins/               config plugin that applies the Android upload key
 assets/images/         app icon, adaptive icon, splash
 .github/workflows/     Android (APK/AAB) and iOS builds

@@ -59,7 +59,8 @@
       ],
       "expo-localization",
       "expo-web-browser",
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

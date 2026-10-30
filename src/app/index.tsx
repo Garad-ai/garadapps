@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   BackHandler,
   Image,
   Linking,
@@ -15,8 +16,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView as RNWebView, WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
-import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import type { FileDownloadEvent, ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 
+import { BRIDGE_SCRIPT, copyText, saveDownload, speak, stopSpeaking } from '@/lib/bridge';
 import { APP_USER_AGENT, isSiteUrl, START_URL } from '@/lib/config';
 import { useIsDark, usePalette } from '@/lib/theme';
 
@@ -26,16 +28,18 @@ const WebView = RNWebView as unknown as typeof RNWebView<object>;
 type WebViewHandle = RNWebView<object>;
 
 const somali = getLocales()[0]?.languageCode !== 'en';
-const OFFLINE = somali
+const STRINGS = somali
   ? {
       title: 'Lama gaari karo Garad AI',
       body: 'Hubi internetkaaga oo isku day mar kale.',
       retry: 'Isku day mar kale',
+      downloadFailed: 'Faylka lama soo dejin karo. Isku day mar kale.',
     }
   : {
       title: "Can't reach Garad AI",
       body: 'Check your internet connection and try again.',
       retry: 'Try again',
+      downloadFailed: "The file couldn't be downloaded. Please try again.",
     };
 
 /**
@@ -88,18 +92,47 @@ export default function GaradApp() {
   }, []);
 
   const onMessage = useCallback((event: WebViewMessageEvent) => {
+    let message: Record<string, unknown>;
     try {
-      const message = JSON.parse(event.nativeEvent.data) as {
-        type?: string;
-        background?: unknown;
-        dark?: unknown;
-      };
-      if (message.type === 'theme' && typeof message.background === 'string') {
-        setPageTheme({ background: message.background, dark: message.dark === true });
-      }
+      message = JSON.parse(event.nativeEvent.data);
     } catch {
-      // Ignore messages that are not from the Chat Pro app shell.
+      return; // Not a message from the Chat Pro app shell or the download bridge.
     }
+    if (message.type === 'theme' && typeof message.background === 'string') {
+      setPageTheme({ background: message.background, dark: message.dark === true });
+    } else if (message.type === 'copy' && typeof message.text === 'string') {
+      void copyText(message.text);
+    } else if (message.type === 'download' && typeof message.base64 === 'string') {
+      saveDownload(
+        typeof message.name === 'string' ? message.name : 'download',
+        typeof message.mime === 'string' ? message.mime : 'application/octet-stream',
+        message.base64
+      ).catch(() => Alert.alert(STRINGS.downloadFailed));
+    } else if (message.type === 'speak' && typeof message.text === 'string') {
+      speak(
+        message.text,
+        {
+          language: typeof message.lang === 'string' ? message.lang : undefined,
+          rate: typeof message.rate === 'number' ? message.rate : undefined,
+        },
+        (speechEvent) =>
+          webView.current?.injectJavaScript(`window.__garadSpeech && window.__garadSpeech('${speechEvent}'); true;`)
+      );
+    } else if (message.type === 'speakStop') {
+      stopSpeaking();
+    } else if (message.type === 'downloadError') {
+      if (typeof message.url === 'string' && /^https:/i.test(message.url)) {
+        void WebBrowser.openBrowserAsync(message.url);
+      } else {
+        Alert.alert(STRINGS.downloadFailed);
+      }
+    }
+  }, []);
+
+  // iOS reports file responses instead of saving them; fetch them in the page (with the
+  // user's cookies) so they go through the same save/share bridge.
+  const onFileDownload = useCallback(({ nativeEvent }: FileDownloadEvent) => {
+    webView.current?.injectJavaScript(`window.__garadDownload(${JSON.stringify(nativeEvent.downloadUrl)}); true;`);
   }, []);
 
   const retry = () => {
@@ -139,6 +172,8 @@ export default function GaradApp() {
         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
         onNavigationStateChange={onNavigationStateChange}
         onMessage={onMessage}
+        onFileDownload={onFileDownload}
+        injectedJavaScriptBeforeContentLoaded={BRIDGE_SCRIPT}
         onLoadProgress={({ nativeEvent }) => setProgress(nativeEvent.progress)}
         onLoadEnd={() => {
           setProgress(1);
@@ -155,13 +190,13 @@ export default function GaradApp() {
       {failed && (
         <View style={[StyleSheet.absoluteFill, styles.offline, { backgroundColor: background }]}>
           <Image source={require('../../assets/images/splash-icon.png')} style={styles.mark} />
-          <Text style={[styles.title, { color: c.text }]}>{OFFLINE.title}</Text>
-          <Text style={[styles.body, { color: c.muted }]}>{OFFLINE.body}</Text>
+          <Text style={[styles.title, { color: c.text }]}>{STRINGS.title}</Text>
+          <Text style={[styles.body, { color: c.muted }]}>{STRINGS.body}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={retry}
             style={({ pressed }) => [styles.button, { backgroundColor: c.brand, opacity: pressed ? 0.85 : 1 }]}>
-            <Text style={styles.buttonText}>{OFFLINE.retry}</Text>
+            <Text style={styles.buttonText}>{STRINGS.retry}</Text>
           </Pressable>
         </View>
       )}
