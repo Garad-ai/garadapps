@@ -12,6 +12,8 @@ type Props = {
   version: string;
   updateNote: string | null;
   onTalk: () => void;
+  /** Opens the Garad agent screen; left out where the agent is not available. */
+  onAgent?: () => void;
   onOpenLink: (url: string) => void;
   onCheckUpdates: () => void;
   colors: Palette;
@@ -26,6 +28,7 @@ export function AppMenu({
   version,
   updateNote,
   onTalk,
+  onAgent,
   onOpenLink,
   onCheckUpdates,
   colors: c,
@@ -61,6 +64,7 @@ export function AppMenu({
         </Text>
         <ScrollView>
           {row(STRINGS.talkToGarad, onTalk, true)}
+          {onAgent ? row(STRINGS.agentMenu, onAgent) : null}
           {(config?.links ?? []).map((link) => row(link.label, () => onOpenLink(link.url)))}
           {row(STRINGS.checkForUpdates, onCheckUpdates)}
         </ScrollView>

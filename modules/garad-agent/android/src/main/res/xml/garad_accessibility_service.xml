@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Milestone 1 is read-only: no gestures and no key filtering. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+  android:description="@string/garad_agent_service_description"
+  android:summary="@string/garad_agent_service_summary"
+  android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+  android:accessibilityFeedbackType="feedbackGeneric"
+  android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+  android:canRetrieveWindowContent="true"
+  android:notificationTimeout="200" />

@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView as RNWebView, WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
 import type { FileDownloadEvent, ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 
+import * as GaradAgent from '../../modules/garad-agent';
 import { AppMenu } from '@/components/AppMenu';
 import { Banner } from '@/components/Banner';
 import { BlockingScreen } from '@/components/BlockingScreen';
@@ -55,6 +56,7 @@ export default function GaradApp() {
   const [failed, setFailed] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigation = useNavigation();
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<{ update?: boolean; announcement?: string }>({});
 
@@ -89,6 +91,8 @@ export default function GaradApp() {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Another screen (the agent screen) is on top: let it handle back.
+      if (!navigation.isFocused()) return false;
       if (menuOpen) {
         setMenuOpen(false);
         return true;
@@ -98,7 +102,7 @@ export default function GaradApp() {
       return true;
     });
     return () => subscription.remove();
-  }, [canGoBack, menuOpen]);
+  }, [canGoBack, menuOpen, navigation]);
 
   const onNavigationStateChange = (state: WebViewNavigation) => setCanGoBack(state.canGoBack);
 
@@ -308,6 +312,14 @@ export default function GaradApp() {
           setMenuOpen(false);
           openInPage(withVoice(START_URL));
         }}
+        onAgent={
+          GaradAgent.isSupported
+            ? () => {
+                setMenuOpen(false);
+                router.push('/agent');
+              }
+            : undefined
+        }
         onOpenLink={(url) => {
           setMenuOpen(false);
           if (isSiteUrl(url)) openInPage(url);

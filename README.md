@@ -30,6 +30,7 @@ What the native shell adds:
 | App menu | "Garad app" in the Chat Pro sidebar opens a native sheet: Talk to Garad, plans, help, WhatsApp, email, privacy, terms, check for updates, version |
 | Talk to Garad | Long-press the app icon (Android) or open `garadai://voice` to start Garad Voice straight away; Voice can see the camera (and the screen on desktop browsers) |
 | Voice actions | In Garad Voice, ask Garad to open an app (WhatsApp, Facebook, TikTok, YouTube, Maps…), open a website, call a number, prepare a WhatsApp or SMS message, or start directions (`src/lib/agentActions.ts`). Calls and messages open ready; the user presses call or send |
+| Garad agent (beta, Android) | App menu › Garad agent: a consent screen, then the user turns on Garad's accessibility service in the phone settings. Milestone 1 only reads the app in front (with a 5-second read test); it does not tap or type, never reads password fields and skips banking and mobile-money apps. See `docs/AGENT_PLAN.md` |
 | Offline screen | Shown when the site can't be reached, with a retry button |
 | App mode | The user agent ends with `GaradApp/<version>`; Chat Pro then switches to app mode (no pinch or focus zoom, no tap highlights or shortcut hints) |
 | Theme sync | Chat Pro reports its background colour, so the status bar and safe areas follow the user's light/dark theme |
@@ -53,6 +54,8 @@ polish ships with normal web deploys. The site and start page are set in `app.js
 
 ```text
 src/app/index.tsx      the web shell (WebView, back button, links, offline screen)
+src/app/agent.tsx      Garad agent consent, on/off and read test
+modules/garad-agent/   Android accessibility service and its JS API (Expo local module)
 src/lib/config.ts      site URL, start page, allowed domains, user agent
 src/lib/bridge.ts      injected script + native handlers for downloads, clipboard and read aloud
 src/lib/agentActions.ts phone actions requested by Garad Voice
@@ -153,6 +156,8 @@ For each release, bump `expo.version` and `expo.ios.buildNumber` in `app.json`.
 - [ ] Reviewer demo account with credits, added to the review notes
 - [ ] If Google sign-in is offered on iOS, Sign in with Apple must be offered too (guideline 4.8)
 - [ ] No web checkout for digital subscriptions inside the iOS app (see Known limitations)
+- [ ] Google Play accessibility declaration and review video for the Garad agent, or ship the agent
+      only in a tester build until it is approved (see `docs/AGENT_PLAN.md`)
 
 ## Roadmap
 

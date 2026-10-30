@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="garad_agent_service_label">Garad agent</string>
+  <string name="garad_agent_service_summary">Lets Garad read what is on your screen when you ask it to.</string>
+  <string name="garad_agent_service_description">Garad agent reads the text and buttons on your screen only when you ask Garad Voice for help, so it can describe the screen and, in a later update, help you act in apps with your spoken confirmation. It never reads password fields and does not work in banking or mobile-money apps. You can turn it off here or in the Garad AI app at any time.</string>
+</resources>

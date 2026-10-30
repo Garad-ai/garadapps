@@ -18,6 +18,41 @@ const so = {
   checkForUpdates: 'Hubi cusbooneysiin',
   upToDate: 'Waxaad haysataa nooca ugu dambeeyay.',
   version: 'Nooca',
+  back: 'Dib u noqo',
+  agentMenu: 'Garad agent (tijaabo)',
+  agentTitle: 'Garad agent',
+  agentIntro:
+    'Garad agent wuxuu Garad u oggolaanayaa inuu akhriyo waxa shaashaddaada ku jira marka aad codsato, si uu kuugu sharxo. Waa tijaabo: hadda wuu akhriyaa oo kaliya, wax ma riixo, wax ma qoro.',
+  agentReadsTitle: 'Waxa uu akhriyo',
+  agentReadsBody:
+    'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya marka aad codsato. Hadda waxa la akhriyo telefoonkan kama baxaan: waxaa lagu tusayaa tijaabada hoose oo kaliya. Cusbooneysiin dambe, waxaa loo diri doonaa Garad Voice marka aad weydiiso oo kaliya.',
+  agentRulesTitle: 'Xeerarka ammaanka',
+  agentRules: [
+    'Meelaha password-ka weligiis ma akhriyo.',
+    'Kuma shaqeeyo apps-ka bangiyada, lacagta mobile-ka (EVC Plus, Zaad, e-Dahab iyo kuwa kale) iyo password-yada.',
+    'Hadda wax ma riixo, wax ma qoro. Markii dambe, wax kasta oo aan dib loo celin karin wuxuu u baahan doonaa inaad "haa" dhahdo.',
+    'Waad damin kartaa wakhti kasta, halkan ama Settings-ka telefoonka.',
+  ],
+  agentStatusOn: 'Wuu shidan yahay',
+  agentStatusStarting: 'Wuu shidan yahay, wuu bilaabanayaa…',
+  agentStatusOff: 'Wuu dansan yahay',
+  agentConsent: 'Waan fahmay oo waan oggolahay',
+  agentOpenSettings: 'Fur Settings-ka Accessibility',
+  agentSettingsHint:
+    'Settings-ka, fur "Installed apps" (ama "Downloaded apps"), dooro Garad agent, kadibna shid. Haddii uu xiran yahay (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", kadib mar kale isku day.',
+  agentTurnOff: 'Dami Garad agent',
+  agentTestTitle: 'Tijaabi akhriska',
+  agentTestHint: 'Riix badhanka, u gudub app kale (tusaale WhatsApp), sug 5 ilbiriqsi, kadibna halkan ku soo laabo.',
+  agentTestButton: 'Akhri shaashadda 5 ilbiriqsi kadib',
+  agentTestWaiting: 'Waan sugayaa…',
+  agentResult: (count: number, app: string) => `${count} shay ayaa laga akhriyay ${app}`,
+  agentResultTruncated: 'Liiska waa la gaabiyay.',
+  agentReasonBlocked: 'App-kan waa la xannibay (bangi, lacag ama password), lama akhriyin.',
+  agentReasonOff: 'Garad agent wuu dansan yahay.',
+  agentReasonNoWindow: 'Shaashad la akhriyo lama helin. Isku day mar kale.',
+  agentUnsupported: 'Garad agent wuxuu hadda ku shaqeeyaa Android oo kaliya.',
+  agentRoleButton: 'badhan',
+  agentRoleField: 'meel wax lagu qoro',
 };
 
 type Strings = typeof so;
@@ -40,6 +75,41 @@ const en: Strings = {
   checkForUpdates: 'Check for updates',
   upToDate: 'You have the latest version.',
   version: 'Version',
+  back: 'Back',
+  agentMenu: 'Garad agent (beta)',
+  agentTitle: 'Garad agent',
+  agentIntro:
+    'Garad agent lets Garad read what is on your screen when you ask, so it can describe it to you. This is a beta: for now it only reads. It does not tap or type.',
+  agentReadsTitle: 'What it reads',
+  agentReadsBody:
+    'The text and buttons of the app on your screen, only when you ask. For now nothing it reads leaves this phone: it is only shown to you in the test below. In a later update it will go to Garad Voice, only when you ask.',
+  agentRulesTitle: 'Safety rules',
+  agentRules: [
+    'It never reads password fields.',
+    'It does not work in banking, mobile-money (EVC Plus, Zaad, e-Dahab and others) or password apps.',
+    'For now it does not tap or type. Later, anything that cannot be undone will need your spoken "yes".',
+    'You can turn it off at any time, here or in the phone settings.',
+  ],
+  agentStatusOn: 'On',
+  agentStatusStarting: 'On, starting…',
+  agentStatusOff: 'Off',
+  agentConsent: 'I understand and agree',
+  agentOpenSettings: 'Open Accessibility settings',
+  agentSettingsHint:
+    'In settings, open "Installed apps" (or "Downloaded apps"), choose Garad agent and turn it on. If the switch is greyed out (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", then try again.',
+  agentTurnOff: 'Turn off Garad agent',
+  agentTestTitle: 'Test reading',
+  agentTestHint: 'Press the button, switch to another app (WhatsApp, for example), wait 5 seconds, then come back here.',
+  agentTestButton: 'Read the screen in 5 seconds',
+  agentTestWaiting: 'Waiting…',
+  agentResult: (count: number, app: string) => `Read ${count} items from ${app}`,
+  agentResultTruncated: 'The list was cut short.',
+  agentReasonBlocked: 'This app is blocked (banking, money or passwords), so it was not read.',
+  agentReasonOff: 'Garad agent is off.',
+  agentReasonNoWindow: 'No screen was found to read. Try again.',
+  agentUnsupported: 'Garad agent is only available on Android for now.',
+  agentRoleButton: 'button',
+  agentRoleField: 'text field',
 };
 
 /** Somali unless the phone is set to English. */

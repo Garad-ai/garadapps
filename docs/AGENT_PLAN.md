@@ -6,6 +6,9 @@
 > fariimaha, si uu u caawiyo dadka aan gacmaha ama indhaha lahayn. Taasi waxay u baahan tahay code
 > Android native ah (AccessibilityService), oggolaansho cad oo user-ka laga helo, iyo ansixinta
 > Google Play. Qorshahan wuxuu sharxayaa sida loo dhisayo si ammaan ah.
+>
+> **Marxaladda 1aad (code-ka waa la qoray):** shaashadda oggolaanshaha, shidid iyo demin, iyo
+> akhrinta shaashadda (kaliya akhris). Weli laguma tijaabin telefoon, ilaa APK la dhiso.
 
 ## Where we are
 
@@ -18,6 +21,7 @@
 | "Talk to Garad" shortcut | Done: long-press the app icon, or `garadai://voice` |
 | Read aloud, dictation, downloads, copy in the app | Done |
 | Admin control of the app | Done: Admin › Settings › Mobile App |
+| Accessibility agent, milestone 1 | Written, not yet run on a phone: `modules/garad-agent` (read-only service) and the consent screen `src/app/agent.tsx` |
 
 Phase 1 only uses links the phone already understands, so it needs no special permission. It cannot
 see or press anything inside other apps. That is phase 2.
@@ -95,6 +99,35 @@ same realtime session. This shares the native-voice work above, so it belongs in
   declaration.
 - Until approval, phase 2 can ship in a separate build distributed as an APK to testers.
 
+### Milestone 1: what is in the code
+
+- `modules/garad-agent/` is an Expo local module, autolinked on Android; iOS and the web get
+  `isSupported = false`.
+  - `GaradAccessibilityService` is read-only: no gestures, no key filtering, no event handling.
+  - `ScreenReader` turns the active window into at most 300 visible elements. Password fields
+    come back as `••••`. Packages whose name contains a blocked keyword (bank, wallet, pay, evc,
+    zaad, edahab, dahabshiil, authenticator, password…) return `blocked_app` and are not read.
+  - JS API: `isSupported`, `isEnabled()`, `isConnected()`, `openSettings()`, `disable()` and
+    `readScreen(delayMs)`. The delay runs natively, because JS timers pause while Garad is in
+    the background.
+- `src/app/agent.tsx`, reached from App menu › Garad agent (beta):
+  - Explains what is read and the safety rules, in Somali or English.
+  - "I understand and agree" must be ticked before the settings button works.
+  - Shows on / starting / off, re-checked whenever the app comes back to the front.
+  - A tester read: switch to another app and see what Garad read 5 seconds later. Nothing read
+    leaves the phone in this milestone.
+- Checked so far:
+  - The Kotlin compiles against the Android 14 API (Expo DSL stubbed).
+  - The block list was run on sample packages.
+  - TypeScript passes.
+  - The Android JS bundle exports.
+  - Autolinking resolves `garad-agent` for Gradle.
+- Not yet checked: a Gradle build and a run on a phone (blocked by milestone 0).
+- Android 13+ greys out accessibility services of apps installed from an APK file ("restricted
+  settings") until the user allows them in App info. The settings hint on the consent screen says
+  how. Installs from Google Play are not affected.
+- The package keyword list is a heuristic. A precise list managed from the admin panel is a follow-up.
+
 ## Blind and low-vision users
 
 | Feature | How |
@@ -112,7 +145,7 @@ same realtime session. This shares the native-voice work above, so it belongs in
 | # | Milestone | Done when |
 | --- | --- | --- |
 | 0 | **Android build pipeline** (blocking everything below) | An APK builds in CI or locally; today GitHub Actions is blocked by the account's billing lock and the cloud environment cannot reach `dl.google.com` |
-| 1 | `garad-agent` module skeleton, consent screen, enable/disable | The service turns on and off from the app and logs screen trees on a test phone |
+| 1 | `garad-agent` module skeleton, consent screen, enable/disable (**code written**, waiting for a phone test) | The service turns on and off from the app and logs screen trees on a test phone |
 | 2 | Read screen and tap or type with confirmations | "Open WhatsApp and read my last message" and "write a Facebook post (don't publish)" work on 3 phones |
 | 3 | Notification replies and call announcements | Reply to WhatsApp and SMS by voice with a spoken confirmation |
 | 4 | Native background voice and overlay | Voice keeps running while another app is in front; Stop works everywhere |
