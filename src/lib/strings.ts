@@ -55,6 +55,13 @@ const so = {
   agentUnsupported: 'Garad agent wuxuu hadda ku shaqeeyaa Android oo kaliya.',
   agentRoleButton: 'badhan',
   agentRoleField: 'meel wax lagu qoro',
+  agentMessagesTitle: 'Fariimaha iyo wicitaannada',
+  agentMessagesBody:
+    'Haddii aad oggolaato, Garad wuxuu akhrin karaa fariimaha cusub (WhatsApp, SMS, Telegram iyo kuwa kale), kaaga jawaabi karaa marka aad "haa" dhahdo, wuxuuna kuu sheegi karaa cidda ku soo wacaysa, kuuna qaadi karaa ama diidi karaa wicitaanka. Fariimaha bangiyada iyo lacagta lama akhriyo, koodhadhka (OTP) waa la qariyaa.',
+  agentMessagesOn: 'Oggolaanshaha ogeysiisyada: shidan',
+  agentMessagesOff: 'Oggolaanshaha ogeysiisyada: dansan',
+  agentMessagesOpen: 'Fur oggolaanshaha ogeysiisyada',
+  agentAnnounce: 'Kor ugu akhri fariimaha cusub marka Garad Voice xiran yahay',
 };
 
 type Strings = typeof so;
@@ -114,6 +121,13 @@ const en: Strings = {
   agentUnsupported: 'Garad agent is only available on Android for now.',
   agentRoleButton: 'button',
   agentRoleField: 'text field',
+  agentMessagesTitle: 'Messages and calls',
+  agentMessagesBody:
+    'If you allow it, Garad can read new messages (WhatsApp, SMS, Telegram and others), reply after you say "yes", tell you who is calling, and answer or decline the call. Messages from banks and mobile money are not read, and one-time codes are hidden.',
+  agentMessagesOn: 'Notification access: on',
+  agentMessagesOff: 'Notification access: off',
+  agentMessagesOpen: 'Open notification access',
+  agentAnnounce: 'Read new messages aloud when Garad Voice is closed',
 };
 
 /** Somali unless the phone is set to English. */

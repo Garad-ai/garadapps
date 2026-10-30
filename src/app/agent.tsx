@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import * as GaradAgent from '../../modules/garad-agent';
@@ -32,7 +32,13 @@ export default function AgentScreen() {
   const [reading, setReading] = useState(false);
   const [result, setResult] = useState<ScreenReadResult | null>(null);
 
-  const refresh = useCallback(() => setStatus(readStatus()), []);
+  const [notifications, setNotifications] = useState(GaradAgent.isNotificationAccessEnabled);
+  const [announce, setAnnounce] = useState(GaradAgent.getAnnounceAloud);
+
+  const refresh = useCallback(() => {
+    setStatus(readStatus());
+    setNotifications(GaradAgent.isNotificationAccessEnabled());
+  }, []);
 
   // The user turns the service on in system settings, so re-check whenever Garad comes back.
   // The service connects a moment after it is switched on, hence the second check.
@@ -185,6 +191,39 @@ export default function AgentScreen() {
                 />
               </>
             )}
+
+            <View style={card}>
+              <Text accessibilityRole="header" style={[styles.cardTitle, { color: c.text }]}>
+                {STRINGS.agentMessagesTitle}
+              </Text>
+              <Text style={[styles.body, { color: c.muted }]}>{STRINGS.agentMessagesBody}</Text>
+              <View style={styles.statusRow} accessible accessibilityLiveRegion="polite">
+                <View style={[styles.dot, { backgroundColor: notifications ? '#2e9d5b' : c.faint }]} />
+                <Text style={[styles.body, styles.statusText, { color: c.text }]}>
+                  {notifications ? STRINGS.agentMessagesOn : STRINGS.agentMessagesOff}
+                </Text>
+              </View>
+              <SecondaryButton
+                label={STRINGS.agentMessagesOpen}
+                onPress={GaradAgent.openNotificationSettings}
+                color={c.text}
+                border={c.line}
+              />
+              {notifications ? (
+                <View style={styles.switchRow}>
+                  <Text style={[styles.body, styles.flex, { color: c.text }]}>{STRINGS.agentAnnounce}</Text>
+                  <Switch
+                    accessibilityLabel={STRINGS.agentAnnounce}
+                    value={announce}
+                    onValueChange={(value) => {
+                      GaradAgent.setAnnounceAloud(value);
+                      setAnnounce(value);
+                    }}
+                    trackColor={{ true: c.brand, false: c.surfaceStrong }}
+                  />
+                </View>
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
@@ -293,6 +332,7 @@ const styles = StyleSheet.create({
   ruleRow: { flexDirection: 'row', gap: 8 },
   bullet: { fontSize: 15, lineHeight: 22, fontWeight: '700' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
   statusText: { flex: 1 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },

@@ -8,4 +8,6 @@
   <string name="garad_agent_confirm_tap">Garad wuxuu rabaa inuu riixo “%1$s” gudaha %2$s. Ma samaynayaa?</string>
   <string name="garad_agent_confirm_yes">Haa, samee</string>
   <string name="garad_agent_confirm_no">Maya</string>
+  <string name="garad_agent_call_from">Wicitaan ka yimid %1$s</string>
+  <string name="garad_agent_confirm_reply">Garad wuxuu rabaa inuu u diro “%1$s” %2$s gudaha %3$s. Ma dirayaa?</string>
 </resources>

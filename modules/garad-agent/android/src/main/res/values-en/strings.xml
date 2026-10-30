@@ -6,4 +6,6 @@
   <string name="garad_agent_confirm_tap">Garad wants to press “%1$s” in %2$s. Go ahead?</string>
   <string name="garad_agent_confirm_yes">Yes, do it</string>
   <string name="garad_agent_confirm_no">No</string>
+  <string name="garad_agent_call_from">Call from %1$s</string>
+  <string name="garad_agent_confirm_reply">Garad wants to send “%1$s” to %2$s in %3$s. Send it?</string>
 </resources>

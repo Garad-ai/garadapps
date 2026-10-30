@@ -37,6 +37,27 @@ class GaradAgentModule : Module() {
       context.startActivity(intent)
     }
 
+    /** True when the user has given Garad notification access (messages and calls). */
+    Function("isNotificationAccessEnabled") {
+      val component = ComponentName(context, GaradNotificationListener::class.java).flattenToString()
+      Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        ?.split(':')?.any { it.equals(component, ignoreCase = true) } ?: false
+    }
+
+    Function("openNotificationSettings") {
+      val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
+
+    /** Whether new messages and calls are read aloud while Garad Voice is closed (off by default). */
+    Function("getAnnounceAloud") {
+      GaradNotificationListener.announceAloud(context)
+    }
+
+    Function("setAnnounceAloud") { value: Boolean ->
+      GaradNotificationListener.setAnnounceAloud(context, value)
+    }
+
     /** Turns the service off without leaving the app. Turning it on needs the settings screen. */
     Function("disable") {
       GaradAccessibilityService.instance?.disableSelf()

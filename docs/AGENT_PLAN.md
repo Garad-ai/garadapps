@@ -10,7 +10,10 @@
 > **Marxaladda 1aad (code-ka waa la qoray):** shaashadda oggolaanshaha, shidid iyo demin, iyo
 > akhrinta shaashadda. **Marxaladda 2aad (code-ka waa la qoray):** Garad Voice wuxuu akhriyaa
 > shaashadda, wuu riixaa, wuu qoraa, wuuna scroll gareeyaa. Kahor dirid, daabacid, wicitaan,
-> lacag bixin ama tirtirid, wuxuu sugayaa "haa" adiga ama badhanka "Haa, samee". Labaduba weli
+> lacag bixin ama tirtirid, wuxuu sugayaa "haa" adiga ama badhanka "Haa, samee".
+> **Marxaladda 3aad (code-ka waa la qoray):** Garad wuxuu akhriyaa fariimaha cusub (WhatsApp, SMS,
+> Telegram…), wuu ka jawaabaa kadib "haa", wuxuu sheegaa cidda soo wacaysa, wuuna qaadaa ama diidaa
+> wicitaanka. Koodhadhka (OTP) waa la qariyaa, fariimaha bangiyadana lama akhriyo. Saddexdaba weli
 > laguma tijaabin telefoon, ilaa APK la dhiso.
 
 ## Where we are
@@ -208,6 +211,60 @@ paused.
 - **Different phones and app versions:** WhatsApp and Facebook layouts, and Somali speech
   recognition of *haa* and *maya*.
 
+### Milestone 3: what is in the code
+
+**`GaradNotificationListener`.** This is notification access, which the user turns on separately
+from the consent screen. It needs no phone, SMS or contacts permission.
+
+- **Which notifications.**
+  - It keeps the last 30 messaging notifications. These are category `message`, a known messaging
+    app, or the default SMS app.
+  - Banks, mobile money and Garad itself are skipped.
+  - Digits that look like a one-time code are masked: "code 482913" becomes "code ••••".
+- **Calls.** A ringing call is a `call` notification with answer and decline buttons. Garad presses
+  those buttons, so no `ANSWER_PHONE_CALLS` permission is needed.
+- **Announcements.** New messages and calls go to the Garad page, where Garad Voice announces them
+  if it is open.
+  - Only if the user turns on *Read new messages aloud*, the phone's text-to-speech reads them
+    while Voice is closed.
+  - The page tells the phone when Voice opens and closes (`voice_session`).
+
+**New voice tools.**
+
+| Tool | What it does |
+| --- | --- |
+| `read_messages` | Up to 10 newest messages, with ids, plus a ringing call |
+| `reply_to_message` | Replies through the notification's own Reply action, after confirmation |
+| `answer_call` | Presses the call notification's answer button |
+| `decline_call` | Presses the call notification's decline button |
+
+**Rules.** Replies use the same confirmation as taps:
+
+- an on-screen panel, *Garad wants to send "…" to Ahmed in WhatsApp*, when the accessibility
+  service is on;
+- otherwise the user's spoken yes, checked against their own transcript.
+
+Message text reaches the model marked as content, not instructions.
+
+**Checked here.**
+
+- The Kotlin compiles. The code masking was run on Somali and English samples.
+- The Playwright run with a fake phone checked:
+  - tools offered;
+  - reading messages;
+  - a reply confirmed by "haa";
+  - a new-message notice spoken through Voice, including one that tries to give instructions;
+  - an incoming-call notice;
+  - answering a call;
+  - `voice_session` on open and close.
+
+**Needs a phone.**
+
+- How each messaging app labels its notifications and call buttons. The button titles are matched
+  in English and Somali, with a fallback to Android's call-notification order.
+- Text-to-speech in Somali. Most phones have no Somali voice; they use the phone's default voice.
+- Android 13+ restricted settings apply to notification access too, for APK installs.
+
 ## Blind and low-vision users
 
 | Feature | How |
@@ -227,7 +284,7 @@ paused.
 | 0 | **Android build pipeline** (blocking everything below) | An APK builds in CI or locally; today GitHub Actions is blocked by the account's billing lock and the cloud environment cannot reach `dl.google.com` |
 | 1 | `garad-agent` module skeleton, consent screen, enable/disable (**code written**, waiting for a phone test) | The service turns on and off from the app and logs screen trees on a test phone |
 | 2 | Read screen and tap or type with confirmations (**code written**, waiting for a phone test) | "Open WhatsApp and read my last message" and "write a Facebook post (don't publish)" work on 3 phones |
-| 3 | Notification replies and call announcements | Reply to WhatsApp and SMS by voice with a spoken confirmation |
+| 3 | Notification replies and call announcements (**code written**, waiting for a phone test) | Reply to WhatsApp and SMS by voice with a spoken confirmation |
 | 4 | Native background voice and overlay | Voice keeps running while another app is in front; Stop works everywhere |
 | 5 | Screen sharing (MediaProjection) | "What's on my screen?" uses a live frame |
 | 6 | Default assistant and TalkBack pass | Power-button launch; TalkBack test report with no blocking issues |

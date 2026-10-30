@@ -33,12 +33,19 @@ type NativeGaradAgent = {
   readScreen(delayMs: number | null): Promise<ScreenReadResult>;
   perform(name: string, args: Record<string, unknown>): Promise<AgentResult>;
   evaluateInPage(script: string): void;
+  isNotificationAccessEnabled(): boolean;
+  openNotificationSettings(): void;
+  getAnnounceAloud(): boolean;
+  setAnnounceAloud(value: boolean): void;
 };
 
 /** What a screen action tells Garad Voice; `screen` describes the screen after it. */
 export type AgentResult = { ok: boolean; message: string; screen?: string; needs_confirmation?: boolean };
 
-/** Screen actions carried out by the accessibility service (see AgentController.kt). */
+/**
+ * Actions carried out natively (AgentController.kt): the screen through the accessibility
+ * service, messages and calls through notification access, and Voice bookkeeping.
+ */
 export const SCREEN_ACTIONS = new Set([
   'read_screen',
   'tap',
@@ -47,6 +54,11 @@ export const SCREEN_ACTIONS = new Set([
   'phone_button',
   'confirm_action',
   'stop',
+  'read_messages',
+  'reply_to_message',
+  'answer_call',
+  'decline_call',
+  'voice_session',
 ]);
 
 const native = requireOptionalNativeModule<NativeGaradAgent>('GaradAgent');
@@ -72,6 +84,25 @@ export function openSettings(): void {
 /** Turns the agent off straight away. Turning it on always goes through the settings screen. */
 export function disable(): void {
   native?.disable();
+}
+
+/** Garad may read message and call notifications (a separate switch in the phone settings). */
+export function isNotificationAccessEnabled(): boolean {
+  return native?.isNotificationAccessEnabled() ?? false;
+}
+
+/** Opens the phone's notification access settings. */
+export function openNotificationSettings(): void {
+  native?.openNotificationSettings();
+}
+
+/** Read new messages and calls aloud while Garad Voice is closed (off by default). */
+export function getAnnounceAloud(): boolean {
+  return native?.getAnnounceAloud() ?? false;
+}
+
+export function setAnnounceAloud(value: boolean): void {
+  native?.setAnnounceAloud(value);
 }
 
 /** Runs a screen action requested by Garad Voice. Safety rules are enforced natively. */

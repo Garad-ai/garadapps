@@ -19,6 +19,9 @@ import android.view.accessibility.AccessibilityNodeInfo
  *   the user's own transcript (`confirm_action`);
  * - Stop (the on-screen pill, or saying "stop"/"jooji") refuses all actions for a while.
  *
+ * Messages and calls (notification access) are handled by `Messages`, with the same
+ * confirmation and Stop.
+ *
  * Results are maps for the model: `ok`, `message`, and usually `screen`, a fresh description
  * of the screen after the action. Calls arrive on a background thread.
  */
@@ -26,6 +29,8 @@ object AgentController {
   private const val CONFIRMATION_TTL_MS = 90_000L
   private const val STOP_MS = 20_000L
   private const val MAX_SENSITIVE_LABEL = 40
+
+  private val MESSAGE_ACTIONS = setOf("read_messages", "reply_to_message", "answer_call", "decline_call")
 
   /** Acting (not reading) is refused in these packages. */
   private val NO_ACTION_PACKAGES = setOf(
@@ -55,6 +60,9 @@ object AgentController {
   /** Called by the page bridge when the user answers on screen or presses Stop. */
   var onNotice: ((Map<String, Any?>) -> Unit)? = null
 
+  /** True while Garad Voice is open, so new messages are spoken by Voice and not read aloud. */
+  @Volatile var voiceActive = false
+
   fun attach(service: GaradAccessibilityService) {
     overlay = AgentOverlay(service)
   }
@@ -68,16 +76,22 @@ object AgentController {
 
   @Synchronized
   fun perform(name: String, args: Map<String, Any?>): Map<String, Any?> {
+    if (name == "voice_session") {
+      voiceActive = args["active"] == true
+      return mapOf("ok" to true, "message" to "Noted.")
+    }
+    if (name == "stop") return stop(byUser = false)
+    if (isStopped()) {
+      return fail("The user pressed Stop. Do not continue; ask the user what they want to do.")
+    }
+    if (name == "confirm_action") return confirm(args["approve"] == true, viaOverlay = false)
+    if (name in MESSAGE_ACTIONS) return Messages.perform(name, args)
+
     val service = GaradAccessibilityService.instance
       ?: return fail(
         "Garad agent is turned off. Tell the user to open the Garad app menu, choose Garad agent " +
           "and turn it on.",
       )
-
-    if (name == "stop") return stop(byUser = false)
-    if (isStopped()) {
-      return fail("The user pressed Stop. Do not continue; ask the user what they want to do.")
-    }
 
     return when (name) {
       "read_screen" -> readScreen(service)
@@ -85,7 +99,6 @@ object AgentController {
       "type_text" -> act(service, args) { node, label -> typeText(service, node, label, args["text"]) }
       "scroll" -> scroll(service, args)
       "phone_button" -> phoneButton(service, args["button"] as? String)
-      "confirm_action" -> confirm(service, args["approve"] == true, viaOverlay = false)
       else -> fail("The action \"$name\" is not supported.")
     }
   }
@@ -157,7 +170,7 @@ object AgentController {
     if (isSensitive(node) || isSensitive(target)) {
       val app = service.appLabel(snapshot?.packageName) ?: "this app"
       val shown = targetLabel.ifBlank { "this button" }
-      return askFirst(service, service.getString(R.string.garad_agent_confirm_tap, shown, app)) {
+      return askFirst(service.getString(R.string.garad_agent_confirm_tap, shown, app)) {
         if (!target.refresh()) {
           fail("The screen changed before the user confirmed. Read the screen again.")
         } else {
@@ -220,15 +233,15 @@ object AgentController {
     return after(service, service.performGlobalAction(action), "Pressed $button.")
   }
 
-  private fun askFirst(
-    service: GaradAccessibilityService,
-    description: String,
-    run: () -> Map<String, Any?>,
-  ): Map<String, Any?> {
+  /**
+   * Holds `run` until the user confirms. The on-screen panel needs the accessibility service;
+   * without it the user answers by voice only.
+   */
+  fun askFirst(description: String, run: () -> Map<String, Any?>): Map<String, Any?> {
     pending = Pending(description, SystemClock.elapsedRealtime(), run)
     overlay?.askToConfirm(description) { yes ->
       Thread {
-        val result = synchronized(this) { confirm(service, yes, viaOverlay = true) }
+        val result = synchronized(this) { confirm(yes, viaOverlay = true) }
         onNotice?.invoke(mapOf("type" to "confirmation", "approved" to yes, "result" to result))
       }.start()
     }
@@ -241,7 +254,7 @@ object AgentController {
     )
   }
 
-  private fun confirm(service: GaradAccessibilityService, approve: Boolean, viaOverlay: Boolean): Map<String, Any?> {
+  private fun confirm(approve: Boolean, viaOverlay: Boolean): Map<String, Any?> {
     val waiting = pending ?: return fail("Nothing is waiting for confirmation.")
     pending = null
     if (!viaOverlay) overlay?.hideConfirmation()
@@ -279,7 +292,7 @@ object AgentController {
     )
   }
 
-  private fun fail(message: String): Map<String, Any?> = mapOf("ok" to false, "message" to message)
+  fun fail(message: String): Map<String, Any?> = mapOf("ok" to false, "message" to message)
 
   private fun labelOf(node: AccessibilityNodeInfo): String =
     (node.text?.toString()?.takeIf { it.isNotBlank() && !node.isPassword }
