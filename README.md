@@ -3,50 +3,52 @@
 The Garad AI mobile app for Android and iOS, built with Expo (SDK 58) and React Native. One
 codebase produces the Android app (APK + Play Store AAB) and the iOS app.
 
-> **Soomaali:** App-kani wuxuu isticmaalaa backend-ka Garad_ai oo keliya: isla users-ka, database-ka,
-> models-ka, wadahadallada iyo admin-ka web-ka. Waxa kaliya ee ka duwan waa naqshadda, oo ah
-> qaabka Claude app-ka.
+> **Soomaali:** App-kani waa Garad AI web-ka (https://garad.ai/chat) oo ku dhex jira app native ah.
+> Naqshadda, akoonka, xogta iyo dhammaan astaamaha AI waa kuwa web-ka. Wixii web-ka lagu
+> beddelo si toos ah ayay app-ka uga muuqanayaan, update app la'aan.
 
 ## How it works
 
-The app has no backend of its own. It signs in to the [Garad_ai](https://github.com/Garad-ai/Garad_ai)
-Laravel application and calls the **same controllers as the web Chat Pro**, authenticated with a
-token instead of the browser session. Users, plans, credits, models, conversations and the admin
-panel are shared: a chat started on the web shows up in the app and the other way round. Only the
-design differs, and it follows the Claude app.
+The app is a native shell around the Garad AI web app at `https://garad.ai/chat`. It shows the
+same design, uses the same account and data, and has every AI feature the website has. There is
+one backend and one admin panel for both, and changes deployed to the website appear in the app
+without an app update.
 
-| Area | What it does | Backend (Garad_ai) |
-| --- | --- | --- |
-| Sign in | Email + password, email OTP and authenticator (2FA) codes | `POST /api/auth/login` |
-| Sign up / reset | Create account, forgot password | `/api/auth/register`, `/api/auth/forgot-password` |
-| Chat | Streamed replies through the Chat Pro engine, stop, copy, auto titles | `POST /api/v1/chat/stream` → `GeneratorController@buildStreamedOutput` (`template_type: chatPro`) |
-| Models | Same catalogue and plan locks as the web model picker | `GET /api/v1/chat/models` → `ReactChatController@models` |
-| Web search | Same toggle as the web composer (`realtime`) | same stream endpoint |
-| Sidebar | Starred and recent chats, search, star/delete (long-press) | `/api/v1/chat/conversations*` → `AIChatController` |
-| Account | Name, plan, message usage, language, privacy/terms, sign out, **delete account** | `GET /api/v1/chat/account` → `ReactChatController@account` |
-| Language / theme | Somali (default) and English; light and dark | — |
+What the native shell adds:
 
-These routes are on branch `ccr-58b6bb8a-3q30lk` of Garad_ai; merge and deploy it before releasing
-the app. Login issues a Laravel Passport personal access token, so the server needs a personal
-access client (`php artisan passport:client --personal`).
+| Feature | Details |
+| --- | --- |
+| App icon, splash screen | Garad branding; the splash stays until the site has loaded |
+| Back button (Android) | Goes back inside the site before leaving the app |
+| Swipe back, pull to refresh (iOS) | Native gestures |
+| Uploads, camera, microphone | File inputs, photo capture and voice work inside the site |
+| External links | Other websites open in the in-app browser; `mailto:`/`tel:` open the system app |
+| Offline screen | Shown when the site can't be reached, with a retry button |
+| App mode | The user agent ends with `GaradApp/<version>`; Chat Pro then switches to app mode (no pinch or focus zoom, no tap highlights or shortcut hints) |
+| Theme sync | Chat Pro reports its background colour, so the status bar and safe areas follow the user's light/dark theme |
 
-### Design
+App mode lives in the website itself (`Garad_ai/frontend/src/core/appShell.ts`), so app-specific
+polish ships with normal web deploys. The site and start page are set in `app.json › expo.extra`
+(`siteUrl`, `startPath`).
 
-Warm paper-like neutrals, a serif face for the greeting and the assistant's replies, a composer card
-with the model picker and web search, a bottom-sheet model list and a sidebar with Starred and
-Recents, as in the Claude app. Garad's indigo is the accent colour.
+### Known limitations
+
+- **Google sign-in:** Google blocks OAuth inside embedded browsers, so the Google button opens the
+  system browser and that login does not carry back into the app. Email/password login works. A
+  native Google sign-in can be added later.
+- **Payments on iOS:** Apple requires In-App Purchase for digital subscriptions. Checkout pages on
+  other domains open outside the app. Before submitting to the App Store, hide web checkout when
+  the user agent contains `GaradApp`, or add In-App Purchase (the backend has RevenueCat fields).
+- **App Store review (guideline 4.2):** Apple can reject apps that are only a website. The native
+  features above help; push notifications are the next recommended addition.
 
 ## Project layout
 
 ```text
-src/
-  app/                 Expo Router screens
-    (auth)/            sign in, register, forgot password
-    (app)/             sidebar drawer: new chat (index), c/[id] conversation, account
-  components/          chat view, sidebar, model sheet, Markdown renderer, form controls
-  lib/                 API client, auth/session, account, models, conversations, i18n, theme
+src/app/index.tsx      the web shell (WebView, back button, links, offline screen)
+src/lib/config.ts      site URL, start page, allowed domains, user agent
 plugins/               config plugin that applies the Android upload key
-assets/images/         app icon, adaptive icon, splash, wordmark
+assets/images/         app icon, adaptive icon, splash
 .github/workflows/     Android (APK/AAB) and iOS builds
 ```
 
@@ -62,11 +64,10 @@ npm run android           # build and run on an Android emulator/device
 npm run ios               # macOS only
 ```
 
-The app talks to `https://garad.ai` (`app.json › expo.extra.apiBaseUrl`). Point it at a staging
-backend with an environment variable:
+Point the app at a staging site with an environment variable:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=https://staging.garad.ai npx expo start
+EXPO_PUBLIC_SITE_URL=https://staging.garad.ai npx expo start
 ```
 
 `android/` and `ios/` are generated by `npx expo prebuild` and are not committed. Configure native
@@ -135,15 +136,14 @@ For each release, bump `expo.version` and `expo.ios.buildNumber` in `app.json`.
 
 ## Store review checklist
 
-- [x] In-app account deletion (Apple guideline 5.1.1(v))
-- [x] Privacy policy and terms links inside the app
-- [x] Token stored in the iOS Keychain / Android Keystore; HTTPS-only API
+- [ ] Account deletion reachable from the website's account settings (Apple guideline 5.1.1(v))
 - [ ] Privacy policy URL and Data safety / App Privacy answers in both consoles
 - [ ] Reviewer demo account with credits, added to the review notes
-- [ ] If Google sign-in is added, Sign in with Apple must be offered on iOS too (guideline 4.8)
-- [ ] Selling plans inside the app needs Apple/Google in-app purchases (backend has RevenueCat fields)
+- [ ] If Google sign-in is offered on iOS, Sign in with Apple must be offered too (guideline 4.8)
+- [ ] No web checkout for digital subscriptions inside the iOS app (see Known limitations)
 
 ## Roadmap
 
-More Chat Pro features through the same token routes: file and image attachments, image and video
-generation, agents, projects/folders, voice, and push notifications.
+- Push notifications
+- Native Google and Apple sign-in
+- In-app purchases with RevenueCat

@@ -12,21 +12,28 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Garad AI uses the camera so you can take a photo to send in a chat.",
+        "NSPhotoLibraryUsageDescription": "Garad AI uses your photos so you can attach images to a chat.",
+        "NSMicrophoneUsageDescription": "Garad AI uses the microphone for voice chat and dictation."
       }
     },
     "android": {
       "package": "ai.garad.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#FAF9F5",
+        "backgroundColor": "#F8F8F6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": [
+      "permissions": [
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
@@ -43,24 +50,23 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#faf9f5",
+          "backgroundColor": "#f8f8f6",
           "dark": {
             "image": "./assets/images/splash-icon.png",
-            "backgroundColor": "#262624"
+            "backgroundColor": "#111513"
           }
         }
       ],
       "expo-localization",
       "expo-web-browser",
-      "./plugins/withReleaseSigning",
-      "expo-secure-store",
-      "expo-image"
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "https://garad.ai"
+      "siteUrl": "https://garad.ai",
+      "startPath": "/chat"
     }
   }
 }
