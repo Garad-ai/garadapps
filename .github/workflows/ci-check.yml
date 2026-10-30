@@ -1,0 +1,17 @@
+name: CI check
+on:
+  push:
+    branches: [ci-check]
+jobs:
+  hosted-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "GitHub-hosted runners work"
+  github-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+  third-party-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: gradle/actions/setup-gradle@v4
