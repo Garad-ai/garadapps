@@ -1,8 +1,8 @@
 import { requireOptionalNativeModule } from 'expo';
 
 /**
- * The Garad agent: an Android AccessibilityService that, in milestone 1, only reads the
- * app in front when asked (see docs/AGENT_PLAN.md). On iOS and the web the native module
+ * The Garad agent: an Android AccessibilityService that reads the app in front and acts
+ * on it when Garad Voice asks (see docs/AGENT_PLAN.md). On iOS and the web the native module
  * does not exist, so everything reports "unsupported".
  */
 export type ScreenElement = {
@@ -31,7 +31,23 @@ type NativeGaradAgent = {
   openSettings(): void;
   disable(): void;
   readScreen(delayMs: number | null): Promise<ScreenReadResult>;
+  perform(name: string, args: Record<string, unknown>): Promise<AgentResult>;
+  evaluateInPage(script: string): void;
 };
+
+/** What a screen action tells Garad Voice; `screen` describes the screen after it. */
+export type AgentResult = { ok: boolean; message: string; screen?: string; needs_confirmation?: boolean };
+
+/** Screen actions carried out by the accessibility service (see AgentController.kt). */
+export const SCREEN_ACTIONS = new Set([
+  'read_screen',
+  'tap',
+  'type_text',
+  'scroll',
+  'phone_button',
+  'confirm_action',
+  'stop',
+]);
 
 const native = requireOptionalNativeModule<NativeGaradAgent>('GaradAgent');
 
@@ -56,6 +72,22 @@ export function openSettings(): void {
 /** Turns the agent off straight away. Turning it on always goes through the settings screen. */
 export function disable(): void {
   native?.disable();
+}
+
+/** Runs a screen action requested by Garad Voice. Safety rules are enforced natively. */
+export async function perform(name: string, args: Record<string, unknown>): Promise<AgentResult> {
+  if (!native) return { ok: false, message: 'Screen actions are only available in the Android app.' };
+  return native.perform(name, args);
+}
+
+/**
+ * Runs a script in the Garad web page. Unlike WebView.injectJavaScript this also works
+ * while the app is in the background, when the agent is working in another app.
+ */
+export function evaluateInPage(script: string): boolean {
+  if (!native) return false;
+  native.evaluateInPage(script);
+  return true;
 }
 
 /**

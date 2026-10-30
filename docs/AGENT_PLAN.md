@@ -8,7 +8,10 @@
 > Google Play. Qorshahan wuxuu sharxayaa sida loo dhisayo si ammaan ah.
 >
 > **Marxaladda 1aad (code-ka waa la qoray):** shaashadda oggolaanshaha, shidid iyo demin, iyo
-> akhrinta shaashadda (kaliya akhris). Weli laguma tijaabin telefoon, ilaa APK la dhiso.
+> akhrinta shaashadda. **Marxaladda 2aad (code-ka waa la qoray):** Garad Voice wuxuu akhriyaa
+> shaashadda, wuu riixaa, wuu qoraa, wuuna scroll gareeyaa. Kahor dirid, daabacid, wicitaan,
+> lacag bixin ama tirtirid, wuxuu sugayaa "haa" adiga ama badhanka "Haa, samee". Labaduba weli
+> laguma tijaabin telefoon, ilaa APK la dhiso.
 
 ## Where we are
 
@@ -21,7 +24,7 @@
 | "Talk to Garad" shortcut | Done: long-press the app icon, or `garadai://voice` |
 | Read aloud, dictation, downloads, copy in the app | Done |
 | Admin control of the app | Done: Admin › Settings › Mobile App |
-| Accessibility agent, milestone 1 | Written, not yet run on a phone: `modules/garad-agent` (read-only service) and the consent screen `src/app/agent.tsx` |
+| Accessibility agent, milestones 1 and 2 | Written, not yet run on a phone: `modules/garad-agent` (read, tap, type, scroll, phone buttons, confirmations, Stop), the consent screen `src/app/agent.tsx`, and the voice tools in `Garad_ai/frontend/src/core/appShell.ts` |
 
 Phase 1 only uses links the phone already understands, so it needs no special permission. It cannot
 see or press anything inside other apps. That is phase 2.
@@ -101,6 +104,8 @@ same realtime session. This shares the native-voice work above, so it belongs in
 
 ### Milestone 1: what is in the code
 
+Milestone 2 changed parts of this; see the next section.
+
 - `modules/garad-agent/` is an Expo local module, autolinked on Android; iOS and the web get
   `isSupported = false`.
   - `GaradAccessibilityService` is read-only: no gestures, no key filtering, no event handling.
@@ -128,6 +133,81 @@ same realtime session. This shares the native-voice work above, so it belongs in
   how. Installs from Google Play are not affected.
 - The package keyword list is a heuristic. A precise list managed from the admin panel is a follow-up.
 
+### Milestone 2: what is in the code
+
+**Voice tools.** Garad Voice gets these tools only in the Android app with the agent built in
+(`window.__garadAgent.screen`):
+
+| Tool | What it does |
+| --- | --- |
+| `read_screen` | The app name and its elements as short lines, e.g. `[4] button "Send"`, `[3] field (empty)` |
+| `tap` | Taps an element, or its nearest tappable parent |
+| `type_text` | Replaces the text in a field; never sends |
+| `scroll` | Scrolls the largest list, or the one given, up or down |
+| `phone_button` | Back, home, recent apps, notifications |
+| `confirm_action` | Answers a waiting confirmation from the user's own words |
+
+After each action the phone waits until the app has settled, at most 2.5 s, and returns a fresh
+screen. The model can keep going without calling `read_screen` again.
+
+**Rules enforced in Kotlin (`AgentController.kt`).**
+
+- Element ids are valid only for the latest read in the same app. Anything else returns "the screen
+  has changed".
+- No typing into password fields.
+- No reading or acting in blocked apps.
+- No acting in Garad itself, system settings, permission screens, the package installer or the Play
+  Store.
+- A tap whose label or view id matches send, post, share, call, pay, buy, order, delete, remove,
+  confirm, submit, install, allow, sign out, or Somali dir, wac, bixi, iibso, tirtir, xaqiiji,
+  gudbi, daabac, oggolow, lacag, waits for confirmation:
+  - A panel appears over the app: *Garad wants to press "Send" in WhatsApp. Go ahead?*, with
+    *Yes, do it* and *No*.
+  - The model is told to read back exactly what will happen and ask.
+  - The confirmation expires after 90 s.
+- *Garad · Stop* (a pill at the top while it acts) refuses every action for 20 s.
+
+**Rules enforced in the web page (`appShell.ts`), not in the prompt.**
+
+- `confirm_action` ignores the model's arguments. It reads the user's latest transcript (from the
+  speech-to-text, which the model cannot write) that came after the question:
+  - *haa / yes / dir / ok…* approves.
+  - *maya / no / ha dirin / jooji…* refuses.
+  - Anything else is "not a clear answer".
+- Saying *stop* or *jooji* stops the agent on the phone.
+- At most 20 screen actions per spoken request.
+
+**Background delivery.** While another app is in front, React Native holds back
+`WebView.injectJavaScript`, because view commands wait for frames that pause with the activity. The
+agent therefore returns results with `evaluateJavascript` straight from Kotlin (`PageBridge.kt`).
+Requests from the page still go through React Native's message event, which RN delivers while
+paused.
+
+**Checked here.**
+
+- The Kotlin compiles against the Android 14 API.
+- The screen descriptions and the confirmation word list were run on samples.
+- TypeScript passes in both repos, and the Android JS bundle exports.
+- A Playwright run against Chat Pro with a fake phone and a fake realtime server checked:
+  - the tools are offered;
+  - yes, no and an unclear answer;
+  - confirming with nothing waiting;
+  - an on-screen Yes while the model is talking, where `response.create` is sent after
+    `response.done`;
+  - "jooji" stops the agent;
+  - the 21st step is refused;
+  - phase 1 still works.
+
+**Needs a phone (milestone 0).** Each of the following is the main open question for its feature:
+
+- **Microphone while another app is in front.** Android silences the microphone of background apps
+  unless they run a microphone foreground service. Until milestone 4, spoken follow-ups from inside
+  WhatsApp may not be heard. The on-screen Yes and No still work, and so does a request that runs
+  start to finish in one go, like "open WhatsApp and read my last message".
+- **Starting apps from the background.** This is allowed while the accessibility service is bound.
+- **Different phones and app versions:** WhatsApp and Facebook layouts, and Somali speech
+  recognition of *haa* and *maya*.
+
 ## Blind and low-vision users
 
 | Feature | How |
@@ -146,7 +226,7 @@ same realtime session. This shares the native-voice work above, so it belongs in
 | --- | --- | --- |
 | 0 | **Android build pipeline** (blocking everything below) | An APK builds in CI or locally; today GitHub Actions is blocked by the account's billing lock and the cloud environment cannot reach `dl.google.com` |
 | 1 | `garad-agent` module skeleton, consent screen, enable/disable (**code written**, waiting for a phone test) | The service turns on and off from the app and logs screen trees on a test phone |
-| 2 | Read screen and tap or type with confirmations | "Open WhatsApp and read my last message" and "write a Facebook post (don't publish)" work on 3 phones |
+| 2 | Read screen and tap or type with confirmations (**code written**, waiting for a phone test) | "Open WhatsApp and read my last message" and "write a Facebook post (don't publish)" work on 3 phones |
 | 3 | Notification replies and call announcements | Reply to WhatsApp and SMS by voice with a spoken confirmation |
 | 4 | Native background voice and overlay | Voice keeps running while another app is in front; Stop works everywhere |
 | 5 | Screen sharing (MediaProjection) | "What's on my screen?" uses a live frame |

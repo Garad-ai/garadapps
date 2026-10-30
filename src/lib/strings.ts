@@ -22,15 +22,17 @@ const so = {
   agentMenu: 'Garad agent (tijaabo)',
   agentTitle: 'Garad agent',
   agentIntro:
-    'Garad agent wuxuu Garad u oggolaanayaa inuu akhriyo waxa shaashaddaada ku jira marka aad codsato, si uu kuugu sharxo. Waa tijaabo: hadda wuu akhriyaa oo kaliya, wax ma riixo, wax ma qoro.',
+    'Garad agent wuxuu Garad Voice u oggolaanayaa inuu akhriyo shaashaddaada, uuna kuu riixo ama kuu qoro apps-ka marka aad codsato, tusaale: "fur WhatsApp oo ii akhri fariinta ugu dambeysay". Waa tijaabo.',
   agentReadsTitle: 'Waxa uu akhriyo',
   agentReadsBody:
-    'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya marka aad codsato. Hadda waxa la akhriyo telefoonkan kama baxaan: waxaa lagu tusayaa tijaabada hoose oo kaliya. Cusbooneysiin dambe, waxaa loo diri doonaa Garad Voice marka aad weydiiso oo kaliya.',
+    'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya inta aad Garad Voice la hadlayso oo aad codsato. Waxa la akhriyo waxaa loo diraa Garad Voice si uu kuugu jawaabo, sida hadalkaaga oo kale.',
   agentRulesTitle: 'Xeerarka ammaanka',
   agentRules: [
     'Meelaha password-ka weligiis ma akhriyo.',
     'Kuma shaqeeyo apps-ka bangiyada, lacagta mobile-ka (EVC Plus, Zaad, e-Dahab iyo kuwa kale) iyo password-yada.',
-    'Hadda wax ma riixo, wax ma qoro. Markii dambe, wax kasta oo aan dib loo celin karin wuxuu u baahan doonaa inaad "haa" dhahdo.',
+    'Kahor inta uusan wax dirin, daabicin, wicin, bixin ama tirtirin, wuxuu kaa sugayaa inaad "haa" dhahdo ama riixdo "Haa, samee".',
+    'Kuma dhex shaqeeyo Settings-ka telefoonka, Play Store iyo app-ka Garad laftiisa.',
+    'Riix "Garad · Jooji" ama dheh "jooji" si aad isla markiiba u joojiso.',
     'Waad damin kartaa wakhti kasta, halkan ama Settings-ka telefoonka.',
   ],
   agentStatusOn: 'Wuu shidan yahay',
@@ -79,15 +81,17 @@ const en: Strings = {
   agentMenu: 'Garad agent (beta)',
   agentTitle: 'Garad agent',
   agentIntro:
-    'Garad agent lets Garad read what is on your screen when you ask, so it can describe it to you. This is a beta: for now it only reads. It does not tap or type.',
+    'Garad agent lets Garad Voice read your screen and tap or type in apps for you when you ask, for example "open WhatsApp and read me my last message". This is a beta.',
   agentReadsTitle: 'What it reads',
   agentReadsBody:
-    'The text and buttons of the app on your screen, only when you ask. For now nothing it reads leaves this phone: it is only shown to you in the test below. In a later update it will go to Garad Voice, only when you ask.',
+    'The text and buttons of the app on your screen, only while you are talking to Garad Voice and ask for it. What it reads is sent to Garad Voice to answer you, like your voice is.',
   agentRulesTitle: 'Safety rules',
   agentRules: [
     'It never reads password fields.',
     'It does not work in banking, mobile-money (EVC Plus, Zaad, e-Dahab and others) or password apps.',
-    'For now it does not tap or type. Later, anything that cannot be undone will need your spoken "yes".',
+    'Before it sends, posts, calls, pays or deletes anything, it waits for you to say "yes" or tap "Yes, do it".',
+    'It does not act in phone settings, the Play Store or the Garad app itself.',
+    'Tap "Garad · Stop" or say "stop" to stop it at once.',
     'You can turn it off at any time, here or in the phone settings.',
   ],
   agentStatusOn: 'On',

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="garad_agent_service_summary">Lets Garad read your screen and help you in apps when you ask.</string>
+  <string name="garad_agent_service_description">Garad agent reads the text and buttons on your screen, and taps or types only when you ask Garad Voice. Before it sends, posts, calls, pays or deletes anything, it waits for you to say \"yes\" or tap Yes. It never reads password fields and does not work in banking or mobile-money apps. You can turn it off here or in the Garad AI app at any time.</string>
+  <string name="garad_agent_stop">Garad · Stop</string>
+  <string name="garad_agent_confirm_tap">Garad wants to press “%1$s” in %2$s. Go ahead?</string>
+  <string name="garad_agent_confirm_yes">Yes, do it</string>
+  <string name="garad_agent_confirm_no">No</string>
+</resources>

@@ -24,6 +24,9 @@ import { useIsDark, usePalette } from '@/lib/theme';
 const WebView = RNWebView as unknown as typeof RNWebView<object>;
 type WebViewHandle = RNWebView<object>;
 
+// Tells Chat Pro it can offer Garad Voice the screen tools (appShell.ts, hasScreenAgent).
+const AGENT_FLAG = 'window.__garadAgent = { screen: true }; true;';
+
 function withVoice(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}voice=1`;
 }
@@ -130,13 +133,18 @@ export default function GaradApp() {
       // A phone action requested by Garad Voice; the result goes back to the page.
       const id = message.id;
       const args = message.args && typeof message.args === 'object' ? (message.args as Record<string, unknown>) : {};
-      runAgentAction(message.name, args)
+      const run =
+        GaradAgent.isSupported && GaradAgent.SCREEN_ACTIONS.has(message.name)
+          ? GaradAgent.perform(message.name, args)
+          : runAgentAction(message.name, args);
+      run
         .catch(() => ({ ok: false, message: 'The action failed on the phone.' }))
-        .then((result) =>
-          webView.current?.injectJavaScript(
-            `window.__garadAgentResult && window.__garadAgentResult(${JSON.stringify(id)}, ${JSON.stringify(result)}); true;`
-          )
-        );
+        .then((result) => {
+          const script = `window.__garadAgentResult && window.__garadAgentResult(${JSON.stringify(id)}, ${JSON.stringify(result)}); true;`;
+          // Natively when possible: React Native holds back injectJavaScript while another
+          // app is in front, which is where the agent works.
+          if (!GaradAgent.evaluateInPage(script)) webView.current?.injectJavaScript(script);
+        });
     } else if (message.type === 'openAppMenu') {
       setUpdateNote(null);
       setMenuOpen(true);
@@ -277,7 +285,7 @@ export default function GaradApp() {
         onNavigationStateChange={onNavigationStateChange}
         onMessage={onMessage}
         onFileDownload={onFileDownload}
-        injectedJavaScriptBeforeContentLoaded={BRIDGE_SCRIPT}
+        injectedJavaScriptBeforeContentLoaded={GaradAgent.isSupported ? `${BRIDGE_SCRIPT}\n${AGENT_FLAG}` : BRIDGE_SCRIPT}
         onLoadProgress={({ nativeEvent }) => setProgress(nativeEvent.progress)}
         onLoadEnd={() => {
           setProgress(1);

@@ -1,6 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Lets the agent show app names ("WhatsApp") instead of package names. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+  </queries>
   <application>
-    <!-- Garad agent: reads the screen only after the user turns it on in Accessibility settings. -->
+    <!-- Garad agent: works only after the user turns it on in Accessibility settings. -->
     <service
       android:name="ai.garad.agent.GaradAccessibilityService"
       android:exported="true"

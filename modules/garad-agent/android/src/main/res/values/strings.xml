@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Somali by default, like the rest of the app; English is in values-en. -->
 <resources>
   <string name="garad_agent_service_label">Garad agent</string>
-  <string name="garad_agent_service_summary">Lets Garad read what is on your screen when you ask it to.</string>
-  <string name="garad_agent_service_description">Garad agent reads the text and buttons on your screen only when you ask Garad Voice for help, so it can describe the screen and, in a later update, help you act in apps with your spoken confirmation. It never reads password fields and does not work in banking or mobile-money apps. You can turn it off here or in the Garad AI app at any time.</string>
+  <string name="garad_agent_service_summary">Wuxuu Garad u oggolaanayaa inuu akhriyo shaashadda oo uu ku caawiyo apps-ka marka aad codsato.</string>
+  <string name="garad_agent_service_description">Garad agent wuxuu akhriyaa qoraallada iyo badhamada shaashaddaada, wuxuuna riixaa ama qoraa kaliya marka aad Garad Voice ka codsato. Kahor inta uusan wax dirin, daabicin, wicin, bixin ama tirtirin, wuxuu kaa sugayaa inaad \"haa\" dhahdo ama riixdo Haa. Weligiis ma akhriyo meelaha password-ka, kumana shaqeeyo apps-ka bangiyada iyo lacagta mobile-ka. Halkan ama app-ka Garad AI ayaad ka damin kartaa wakhti kasta.</string>
+  <string name="garad_agent_stop">Garad · Jooji</string>
+  <string name="garad_agent_confirm_tap">Garad wuxuu rabaa inuu riixo “%1$s” gudaha %2$s. Ma samaynayaa?</string>
+  <string name="garad_agent_confirm_yes">Haa, samee</string>
+  <string name="garad_agent_confirm_no">Maya</string>
 </resources>

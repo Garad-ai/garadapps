@@ -18,6 +18,10 @@ class GaradAgentModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("GaradAgent")
 
+    OnCreate {
+      AgentController.onNotice = PageBridge::notice
+    }
+
     /** True when the user has turned the service on in Accessibility settings. */
     Function("isEnabled") {
       isServiceEnabled(context)
@@ -51,6 +55,18 @@ class GaradAgentModule : Module() {
           service?.readScreen() ?: mapOf<String, Any?>("available" to false, "reason" to "not_enabled")
         )
       }, (delayMs ?: 0).coerceIn(0, 30_000).toLong())
+    }
+
+    /** A screen action from Garad Voice: read_screen, tap, type_text, scroll, phone_button, confirm_action, stop. */
+    AsyncFunction("perform") { name: String, args: Map<String, Any?> ->
+      AgentController.perform(name, args)
+    }
+
+    /** Runs a script in the Garad web page, also while the app is in the background. */
+    Function("evaluateInPage") { script: String ->
+      PageBridge.remember(appContext.currentActivity)
+      PageBridge.evaluate(script)
+      Unit
     }
   }
 

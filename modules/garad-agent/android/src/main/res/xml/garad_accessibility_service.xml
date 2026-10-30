@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Milestone 1 is read-only: no gestures and no key filtering. -->
+<!-- Events only tell the agent when a screen has settled; it acts through node and global
+     actions, so it needs no gestures and no key filtering. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
   android:description="@string/garad_agent_service_description"
   android:summary="@string/garad_agent_service_summary"
-  android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+  android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
   android:accessibilityFeedbackType="feedbackGeneric"
   android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
   android:canRetrieveWindowContent="true"
-  android:notificationTimeout="200" />
+  android:notificationTimeout="100" />

@@ -20,7 +20,7 @@ function readStatus(): Status {
 }
 
 /**
- * Consent and controls for the Garad agent (milestone 1 in docs/AGENT_PLAN.md): explains what
+ * Consent and controls for the Garad agent (docs/AGENT_PLAN.md): explains what
  * it reads and the safety rules before the user is sent to Accessibility settings, shows
  * whether it is on, and has a read test for testers.
  */
