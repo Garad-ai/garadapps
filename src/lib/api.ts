@@ -168,8 +168,6 @@ export function getUsage(): Promise<Usage> {
 // ---------------------------------------------------------------------------
 // Chat
 
-export type ChatTemplate = { id: number; name: string; slug: string };
-
 export type Conversation = {
   id: number;
   title: string;
@@ -184,28 +182,23 @@ export type ChatMessage = {
   created_at: string;
 };
 
-const DEFAULT_TEMPLATE_SLUG = 'ai-chat-bot';
-let defaultTemplateId: number | null = null;
-
-async function getDefaultTemplateId(): Promise<number> {
-  if (defaultTemplateId !== null) return defaultTemplateId;
-  const templates = await request<ChatTemplate[]>('/api/aichat/chat-templates');
-  const preferred = templates.find((item) => item.slug === DEFAULT_TEMPLATE_SLUG) ?? templates[0];
-  if (!preferred) throw new ApiError('No chat assistant is configured.', 404);
-  defaultTemplateId = preferred.id;
-  return preferred.id;
-}
-
 export function getConversations(): Promise<Conversation[]> {
   return request<Conversation[]>('/api/aichat/recent-chats');
 }
 
-export async function createConversation(): Promise<Conversation> {
-  const categoryId = await getDefaultTemplateId();
-  return request<Conversation>('/api/aichat/new-chat', {
+export function searchConversations(word: string): Promise<Conversation[]> {
+  return request<Conversation[]>('/api/aichat/search-recent-chats', {
     method: 'POST',
-    body: { category_id: categoryId },
+    body: { word },
   });
+}
+
+/** Starts a conversation in the same default chat category the web chat uses. */
+export async function createConversation(): Promise<number> {
+  const data = await request<{ chat: { id: number } }>('/api/v1/chat/conversations', {
+    method: 'POST',
+  });
+  return data.chat.id;
 }
 
 export function renameConversation(id: number, title: string): Promise<unknown> {
@@ -214,6 +207,15 @@ export function renameConversation(id: number, title: string): Promise<unknown> 
 
 export function deleteConversation(id: number): Promise<unknown> {
   return request('/api/aichat/history', { method: 'DELETE', body: { conver_id: id } });
+}
+
+/** Asks the backend to title a new conversation from its first exchange. */
+export async function generateTitle(messageId: number): Promise<string | null> {
+  const data = await request<{ changed?: boolean; new_title?: string }>(
+    '/api/aichat/change-chat-title',
+    { method: 'POST', body: { streamed_message_id: messageId } }
+  );
+  return data.changed && data.new_title ? data.new_title.replace(/^["']|["']$/g, '') : null;
 }
 
 export async function getMessages(conversationId: number): Promise<ChatMessage[]> {
@@ -236,26 +238,32 @@ type StreamHandlers = {
   signal?: AbortSignal;
 };
 
+/** Removes the anti-buffering padding (`/**<random>`) the web chat appends to each chunk. */
+function cleanChunk(data: string): string {
+  return data.replace(/\/\*\*[A-Za-z0-9]*$/, '').replace(/<br\s*\/?>/gi, '\n');
+}
+
 /**
- * Sends a prompt and streams the assistant reply.
+ * Sends a prompt through the same chat engine as the web app and streams the reply.
  *
- * The backend first stores the prompt (POST) and then streams the answer (GET).
- * The stream is newline-delimited text chunks where `<br/>` encodes a newline,
- * terminated by `data: [DONE]`; failures arrive as a line starting with `error:`.
+ * The backend first stores the prompt (POST, returns message_id) and then streams the
+ * answer as server-sent events (GET). Each `data:` line carries a text chunk where
+ * `<br/>` encodes a newline; the stream ends with `event: stop` / `data: [DONE]`.
+ * Returns the message id so the caller can request a title.
  */
 export async function sendMessage(
   conversationId: number,
   prompt: string,
   { onDelta, signal }: StreamHandlers
-): Promise<void> {
-  const { message_id } = await request<{ conver_id: number; message_id: number }>(
-    '/api/aichat/chat-send',
-    { method: 'POST', body: { conver_id: conversationId, prompt } }
-  );
+): Promise<number> {
+  const { message_id } = await request<{ message_id: number }>('/api/v1/chat/send', {
+    method: 'POST',
+    body: { chat_id: conversationId, prompt },
+  });
 
   const token = await tokenStore.get();
-  const query = `conver_id=${conversationId}&message_id=${message_id}`;
-  const response = await streamingFetch(`${API_BASE_URL}/api/aichat/chat-send?${query}`, {
+  const query = `chat_id=${conversationId}&message_id=${message_id}`;
+  const response = await streamingFetch(`${API_BASE_URL}/api/v1/chat/send?${query}`, {
     headers: {
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -278,11 +286,24 @@ export async function sendMessage(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let event = 'message';
 
+  // Returns true when the stream signals completion.
   const handleLine = (line: string): boolean => {
-    if (line.startsWith('data: [DONE]')) return true;
-    if (line.startsWith('error:')) throw new ApiError(line.slice(6).trim(), 500, 'stream');
-    if (line.length > 0) onDelta(line.replace(/<br\s*\/?>/gi, '\n'));
+    if (line === '') {
+      event = 'message';
+      return false;
+    }
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim();
+      return event === 'stop';
+    }
+    if (!line.startsWith('data:')) return false;
+    const data = line.slice(5).replace(/^ /, '');
+    if (data === '[DONE]') return true;
+    if (event === 'error') throw new ApiError(cleanChunk(data), 500, 'stream');
+    const text = cleanChunk(data);
+    if (text) onDelta(text);
     return false;
   };
 
@@ -296,12 +317,13 @@ export async function sendMessage(
       buffer = buffer.slice(newline + 1);
       if (handleLine(line)) {
         await reader.cancel();
-        return;
+        return message_id;
       }
       newline = buffer.indexOf('\n');
     }
   }
   if (buffer.length > 0) handleLine(buffer);
+  return message_id;
 }
 
 // ---------------------------------------------------------------------------

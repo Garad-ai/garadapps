@@ -10,21 +10,32 @@ TypeScript. One codebase produces the Android app (APK + Play Store AAB) and the
 
 ## Features (v1)
 
+The app follows the ChatGPT / Claude pattern: it opens straight into a new chat, and a side
+drawer holds the history.
+
 | Area | What it does | Backend endpoint |
 | --- | --- | --- |
 | Sign in | Email + password, email OTP and authenticator (2FA) codes | `POST /api/auth/login` |
 | Sign up / reset | Create account, forgot password | `/api/auth/register`, `/api/auth/forgot-password` |
-| Chat | Conversation list, new chat, streamed replies, stop, copy, delete | `/api/aichat/*` |
+| Chat | Greeting with suggestions, streamed replies, stop, copy, auto-generated titles | `/api/v1/chat/*` (same engine as the web chat) |
+| History drawer | Search, grouped by Today / Yesterday / 7 days / Older, delete (long-press) | `/api/aichat/recent-chats`, `/api/aichat/history` |
 | Images | Generate an image from a prompt, recent images, share | `/api/aiimage/*` |
 | Account | Profile, plan and remaining credits, language, privacy/terms, sign out, **delete account** | `/api/auth/profile`, `/api/app/usage-data` |
 | Language | Somali (default) and English, switchable in-app | — |
 | Theme | Light and dark, following the device | — |
 
+### One backend, one admin
+
+The app has no backend of its own. It signs in to the same garad.ai Laravel application as the
+website, so users, plans, credits and the admin panel are shared. Chat goes through
+`/api/v1/chat/*`, which calls the same `AIChatController` as the web chat: the default model and
+engine chosen in the admin panel apply to both.
+
 The token is stored in the iOS Keychain / Android Keystore (`expo-secure-store`).
 
 ### Backend requirement
 
-The app signs in through `POST /api/auth/login`, which is added to the
+The app needs `POST /api/auth/login` and `/api/v1/chat/*`, which are added to the
 [`Garad-ai/Garad_ai`](https://github.com/Garad-ai/Garad_ai) backend on branch
 `ccr-58b6bb8a-3q30lk`. Merge and deploy that change before releasing the app. The endpoint issues a
 Laravel Passport personal access token, so the server needs a personal access client
@@ -36,8 +47,7 @@ Laravel Passport personal access token, so the server needs a personal access cl
 src/
   app/                 Expo Router screens
     (auth)/            sign in, register, forgot password
-    (app)/(tabs)/      chats, images, account
-    (app)/chat/[id]    a conversation
+    (app)/             drawer: new chat (index), c/[id] conversation, images, account
   components/          shared UI (buttons, fields, Markdown renderer)
   lib/                 API client, auth/session, i18n, theme, config
 plugins/               config plugin that applies the Android upload key
