@@ -263,7 +263,8 @@ export async function sendMessage(
     signal,
   });
 
-  if (!response.ok || !response.body) {
+  const isJson = (response.headers.get('content-type') ?? '').includes('application/json');
+  if (!response.ok || !response.body || isJson) {
     let body: unknown = null;
     try {
       body = await response.json();
