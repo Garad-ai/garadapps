@@ -1,36 +1,36 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
-// Mirrors the Chat Pro web tokens in Garad_ai/frontend/src/index.css.
+// Warm, paper-like neutrals in the style of the Claude app, with Garad's indigo as the accent.
 const light = {
-  background: '#ffffff',
-  surface: '#f6f6f3',
-  surfaceStrong: '#ecece8',
-  text: '#1d2421',
-  muted: '#69716d',
-  faint: '#939a96',
-  line: '#dedfda',
+  background: '#faf9f5',
+  surface: '#f2f0e8',
+  surfaceStrong: '#e9e6dc',
+  card: '#ffffff',
+  text: '#1f1e1b',
+  muted: '#6b6a64',
+  faint: '#9a988f',
+  line: '#e3e0d6',
   brand: '#514cff',
   brandText: '#ffffff',
-  brandSoft: '#efefff',
-  danger: '#c62828',
-  userBubble: '#514cff',
-  userBubbleText: '#ffffff',
+  brandSoft: '#ecebff',
+  danger: '#b3261e',
+  userBubble: '#efece3',
 };
 
 const dark: typeof light = {
-  background: '#111513',
-  surface: '#181d1b',
-  surfaceStrong: '#202622',
-  text: '#edf0ed',
-  muted: '#a1aaa5',
-  faint: '#7a847f',
-  line: '#333b37',
+  background: '#262624',
+  surface: '#1f1e1d',
+  surfaceStrong: '#34332f',
+  card: '#30302e',
+  text: '#f5f4ef',
+  muted: '#b7b5ab',
+  faint: '#8a887f',
+  line: '#3d3c38',
   brand: '#7773ff',
   brandText: '#ffffff',
-  brandSoft: '#29284b',
-  danger: '#ef5350',
-  userBubble: '#514cff',
-  userBubbleText: '#ffffff',
+  brandSoft: '#2f2e4d',
+  danger: '#f2a29b',
+  userBubble: '#141413',
 };
 
 export type Palette = typeof light;
@@ -42,3 +42,6 @@ export function usePalette(): Palette {
 export function useIsDark(): boolean {
   return useColorScheme() === 'dark';
 }
+
+/** Serif face for greetings and assistant replies, as in the Claude app. */
+export const serif = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
