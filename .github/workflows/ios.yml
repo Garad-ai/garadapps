@@ -1,0 +1,78 @@
+name: iOS
+
+# App Store builds need an Apple Developer account. They are produced by EAS Build,
+# which manages the signing certificate and provisioning profile, and can be sent
+# straight to App Store Connect / TestFlight. Requires the EXPO_TOKEN secret.
+#
+# Without EXPO_TOKEN the workflow still compiles the app for the iOS Simulator,
+# proving the native project builds on macOS.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: Send the build to App Store Connect (TestFlight)
+        type: boolean
+        default: false
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx expo prebuild --platform ios
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -workspace ios/GaradAI.xcworkspace \
+            -scheme GaradAI \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Package simulator app
+        run: cd build/Build/Products/Release-iphonesimulator && zip -r "$GITHUB_WORKSPACE/garad-ai-simulator.zip" GaradAI.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: garad-ai-ios-simulator
+          path: garad-ai-simulator.zip
+          retention-days: 14
+
+  app-store:
+    runs-on: ubuntu-latest
+    env:
+      HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_EXPO_TOKEN == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_EXPO_TOKEN == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        if: env.HAS_EXPO_TOKEN == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+        if: env.HAS_EXPO_TOKEN == 'true'
+      - name: Build with EAS
+        if: env.HAS_EXPO_TOKEN == 'true'
+        run: |
+          if [ "${{ inputs.submit }}" = "true" ] || [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            eas build --platform ios --profile production --non-interactive --auto-submit
+          else
+            eas build --platform ios --profile production --non-interactive
+          fi
+      - name: Skipped
+        if: env.HAS_EXPO_TOKEN != 'true'
+        run: echo "::notice::EXPO_TOKEN is not set, so no App Store build was made. See README › iOS."
