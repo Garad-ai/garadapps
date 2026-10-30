@@ -1,9 +1,8 @@
 import Constants from 'expo-constants';
 
 type Extra = {
-  apiBaseUrl?: string;
-  privacyUrl?: string;
-  termsUrl?: string;
+  siteUrl?: string;
+  startPath?: string;
 };
 
 const extra = (Constants.expoConfig?.extra ?? {}) as Extra;
@@ -12,17 +11,25 @@ function trimSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-/** Base URL of the Garad AI Laravel backend, e.g. https://garad.ai */
-export const API_BASE_URL = trimSlash(
-  process.env.EXPO_PUBLIC_API_BASE_URL || extra.apiBaseUrl || 'https://garad.ai'
+/** The Garad AI website the app shows, e.g. https://garad.ai */
+export const SITE_URL = trimSlash(
+  process.env.EXPO_PUBLIC_SITE_URL || extra.siteUrl || 'https://garad.ai'
 );
 
-export const PRIVACY_URL = extra.privacyUrl || `${API_BASE_URL}/privacy-policy`;
-export const TERMS_URL = extra.termsUrl || `${API_BASE_URL}/terms`;
+/** First page the app opens: the Chat Pro web app. */
+export const START_URL = `${SITE_URL}${extra.startPath || '/chat'}`;
 
-/** Turns a relative storage path from the API into an absolute URL. */
-export function absoluteUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+const siteHost = new URL(SITE_URL).hostname.replace(/^www\./, '');
+
+/** True for garad.ai and its subdomains; everything else opens outside the app. */
+export function isSiteUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === siteHost || host.endsWith(`.${siteHost}`);
+  } catch {
+    return false;
+  }
 }
+
+/** Added to the browser user agent so the website can tell it is running inside the app. */
+export const APP_USER_AGENT = `GaradApp/${Constants.expoConfig?.version ?? '1.0.0'}`;
