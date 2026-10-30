@@ -26,6 +26,9 @@ What the native shell adds:
 | Downloads | Documents, images, videos and exports Chat Pro creates (including `blob:`/`data:` files a WebView can't save) open in the share sheet to save or send; files on other domains open in the browser |
 | Copy | `navigator.clipboard.writeText` goes to the native clipboard |
 | Read aloud | Android WebView has no `speechSynthesis`; the bridge reads replies with the phone's voice (`expo-speech`) |
+| Admin control | Reads Admin › Settings › Mobile App (`/api/mobile-app/config`): forced or optional updates, maintenance screen, announcement banner, menu links |
+| App menu | "Garad app" in the Chat Pro sidebar opens a native sheet: Talk to Garad, plans, help, WhatsApp, email, privacy, terms, check for updates, version |
+| Talk to Garad | Long-press the app icon (Android) or open `garadai://voice` to start Garad Voice straight away; Voice can see the camera (and the screen on desktop browsers) |
 | Offline screen | Shown when the site can't be reached, with a retry button |
 | App mode | The user agent ends with `GaradApp/<version>`; Chat Pro then switches to app mode (no pinch or focus zoom, no tap highlights or shortcut hints) |
 | Theme sync | Chat Pro reports its background colour, so the status bar and safe areas follow the user's light/dark theme |
@@ -51,6 +54,9 @@ polish ships with normal web deploys. The site and start page are set in `app.js
 src/app/index.tsx      the web shell (WebView, back button, links, offline screen)
 src/lib/config.ts      site URL, start page, allowed domains, user agent
 src/lib/bridge.ts      injected script + native handlers for downloads, clipboard and read aloud
+src/lib/remoteConfig.ts admin settings for updates, maintenance, announcement and links
+src/components/        app menu, banners, full-screen notices
+plugins/withVoiceShortcut.js  Android "Talk to Garad" launcher shortcut
 plugins/               config plugin that applies the Android upload key
 assets/images/         app icon, adaptive icon, splash
 .github/workflows/     Android (APK/AAB) and iOS builds

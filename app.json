@@ -60,7 +60,8 @@
       "expo-localization",
       "expo-web-browser",
       "./plugins/withReleaseSigning",
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withVoiceShortcut"
     ],
     "experiments": {
       "typedRoutes": true
