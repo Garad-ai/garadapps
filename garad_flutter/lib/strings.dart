@@ -1,0 +1,239 @@
+import 'dart:ui' show PlatformDispatcher;
+
+/// App text in Somali and English. Somali unless the phone is set to English.
+class Strings {
+  const Strings._({
+    required this.offlineTitle,
+    required this.offlineBody,
+    required this.retry,
+    required this.downloadFailed,
+    required this.maintenanceTitle,
+    required this.maintenanceBody,
+    required this.updateRequiredTitle,
+    required this.updateRequiredBody,
+    required this.updateAvailable,
+    required this.update,
+    required this.later,
+    required this.close,
+    required this.menuTitle,
+    required this.talkToGarad,
+    required this.checkForUpdates,
+    required this.upToDate,
+    required this.version,
+    required this.back,
+    required this.agentMenu,
+    required this.agentTitle,
+    required this.agentIntro,
+    required this.agentReadsTitle,
+    required this.agentReadsBody,
+    required this.agentRulesTitle,
+    required this.agentRules,
+    required this.agentStatusOn,
+    required this.agentStatusStarting,
+    required this.agentStatusOff,
+    required this.agentConsent,
+    required this.agentOpenSettings,
+    required this.agentSettingsHint,
+    required this.agentTurnOff,
+    required this.agentTestTitle,
+    required this.agentTestHint,
+    required this.agentTestButton,
+    required this.agentTestWaiting,
+    required this.agentResult,
+    required this.agentResultTruncated,
+    required this.agentReasonBlocked,
+    required this.agentReasonOff,
+    required this.agentReasonNoWindow,
+    required this.agentUnsupported,
+    required this.agentRoleButton,
+    required this.agentRoleField,
+    required this.agentMessagesTitle,
+    required this.agentMessagesBody,
+    required this.agentMessagesOn,
+    required this.agentMessagesOff,
+    required this.agentMessagesOpen,
+    required this.agentAnnounce,
+  });
+
+  final String offlineTitle;
+  final String offlineBody;
+  final String retry;
+  final String downloadFailed;
+  final String maintenanceTitle;
+  final String maintenanceBody;
+  final String updateRequiredTitle;
+  final String updateRequiredBody;
+  final String updateAvailable;
+  final String update;
+  final String later;
+  final String close;
+  final String menuTitle;
+  final String talkToGarad;
+  final String checkForUpdates;
+  final String upToDate;
+  final String version;
+  final String back;
+  final String agentMenu;
+  final String agentTitle;
+  final String agentIntro;
+  final String agentReadsTitle;
+  final String agentReadsBody;
+  final String agentRulesTitle;
+  final List<String> agentRules;
+  final String agentStatusOn;
+  final String agentStatusStarting;
+  final String agentStatusOff;
+  final String agentConsent;
+  final String agentOpenSettings;
+  final String agentSettingsHint;
+  final String agentTurnOff;
+  final String agentTestTitle;
+  final String agentTestHint;
+  final String agentTestButton;
+  final String agentTestWaiting;
+  final String Function(int count, String app) agentResult;
+  final String agentResultTruncated;
+  final String agentReasonBlocked;
+  final String agentReasonOff;
+  final String agentReasonNoWindow;
+  final String agentUnsupported;
+  final String agentRoleButton;
+  final String agentRoleField;
+  final String agentMessagesTitle;
+  final String agentMessagesBody;
+  final String agentMessagesOn;
+  final String agentMessagesOff;
+  final String agentMessagesOpen;
+  final String agentAnnounce;
+}
+
+final Strings _so = Strings._(
+  offlineTitle: 'Lama gaari karo Garad AI',
+  offlineBody: 'Hubi internetkaaga oo isku day mar kale.',
+  retry: 'Isku day mar kale',
+  downloadFailed: 'Faylka lama soo dejin karo. Isku day mar kale.',
+  maintenanceTitle: 'Garad AI waa la cusbooneysiinayaa',
+  maintenanceBody: 'Fadlan dib ugu soo laabo wax yar kadib.',
+  updateRequiredTitle: 'Cusbooneysii Garad AI',
+  updateRequiredBody: 'Nooca cusub ayaa loo baahan yahay si aad u sii isticmaasho app-ka.',
+  updateAvailable: 'Nooc cusub oo Garad AI ah ayaa diyaar ah.',
+  update: 'Cusbooneysii',
+  later: 'Hadhow',
+  close: 'Xir',
+  menuTitle: 'Garad AI',
+  talkToGarad: 'La hadal Garad',
+  checkForUpdates: 'Hubi cusbooneysiin',
+  upToDate: 'Waxaad haysataa nooca ugu dambeeyay.',
+  version: 'Nooca',
+  back: 'Dib u noqo',
+  agentMenu: 'Garad agent (tijaabo)',
+  agentTitle: 'Garad agent',
+  agentIntro:
+      'Garad agent wuxuu Garad Voice u oggolaanayaa inuu akhriyo shaashaddaada, uuna kuu riixo ama kuu qoro apps-ka marka aad codsato, tusaale: "fur WhatsApp oo ii akhri fariinta ugu dambeysay". Waa tijaabo.',
+  agentReadsTitle: 'Waxa uu akhriyo',
+  agentReadsBody:
+      'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya inta aad Garad Voice la hadlayso oo aad codsato. Waxa la akhriyo waxaa loo diraa Garad Voice si uu kuugu jawaabo, sida hadalkaaga oo kale.',
+  agentRulesTitle: 'Xeerarka ammaanka',
+  agentRules: const [
+    'Meelaha password-ka weligiis ma akhriyo.',
+    'Kuma shaqeeyo apps-ka bangiyada, lacagta mobile-ka (EVC Plus, Zaad, e-Dahab iyo kuwa kale) iyo password-yada.',
+    'Kahor inta uusan wax dirin, daabicin, wicin, bixin ama tirtirin, wuxuu kaa sugayaa inaad "haa" dhahdo ama riixdo "Haa, samee".',
+    'Kuma dhex shaqeeyo Settings-ka telefoonka, Play Store iyo app-ka Garad laftiisa.',
+    'Riix "Garad · Jooji" ama dheh "jooji" si aad isla markiiba u joojiso.',
+    'Waad damin kartaa wakhti kasta, halkan ama Settings-ka telefoonka.',
+  ],
+  agentStatusOn: 'Wuu shidan yahay',
+  agentStatusStarting: 'Wuu shidan yahay, wuu bilaabanayaa…',
+  agentStatusOff: 'Wuu dansan yahay',
+  agentConsent: 'Waan fahmay oo waan oggolahay',
+  agentOpenSettings: 'Fur Settings-ka Accessibility',
+  agentSettingsHint:
+      'Settings-ka, fur "Installed apps" (ama "Downloaded apps"), dooro Garad agent, kadibna shid. Haddii uu xiran yahay (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", kadib mar kale isku day.',
+  agentTurnOff: 'Dami Garad agent',
+  agentTestTitle: 'Tijaabi akhriska',
+  agentTestHint: 'Riix badhanka, u gudub app kale (tusaale WhatsApp), sug 5 ilbiriqsi, kadibna halkan ku soo laabo.',
+  agentTestButton: 'Akhri shaashadda 5 ilbiriqsi kadib',
+  agentTestWaiting: 'Waan sugayaa…',
+  agentResult: (count, app) => '$count shay ayaa laga akhriyay $app',
+  agentResultTruncated: 'Liiska waa la gaabiyay.',
+  agentReasonBlocked: 'App-kan waa la xannibay (bangi, lacag ama password), lama akhriyin.',
+  agentReasonOff: 'Garad agent wuu dansan yahay.',
+  agentReasonNoWindow: 'Shaashad la akhriyo lama helin. Isku day mar kale.',
+  agentUnsupported: 'Garad agent wuxuu hadda ku shaqeeyaa Android oo kaliya.',
+  agentRoleButton: 'badhan',
+  agentRoleField: 'meel wax lagu qoro',
+  agentMessagesTitle: 'Fariimaha iyo wicitaannada',
+  agentMessagesBody:
+      'Haddii aad oggolaato, Garad wuxuu akhrin karaa fariimaha cusub (WhatsApp, SMS, Telegram iyo kuwa kale), kaaga jawaabi karaa marka aad "haa" dhahdo, wuxuuna kuu sheegi karaa cidda ku soo wacaysa, kuuna qaadi karaa ama diidi karaa wicitaanka. Fariimaha bangiyada iyo lacagta lama akhriyo, koodhadhka (OTP) waa la qariyaa.',
+  agentMessagesOn: 'Oggolaanshaha ogeysiisyada: shidan',
+  agentMessagesOff: 'Oggolaanshaha ogeysiisyada: dansan',
+  agentMessagesOpen: 'Fur oggolaanshaha ogeysiisyada',
+  agentAnnounce: 'Kor ugu akhri fariimaha cusub marka Garad Voice xiran yahay',
+);
+
+final Strings _en = Strings._(
+  offlineTitle: "Can't reach Garad AI",
+  offlineBody: 'Check your internet connection and try again.',
+  retry: 'Try again',
+  downloadFailed: "The file couldn't be downloaded. Please try again.",
+  maintenanceTitle: 'Garad AI is being updated',
+  maintenanceBody: 'Please come back in a little while.',
+  updateRequiredTitle: 'Update Garad AI',
+  updateRequiredBody: 'A newer version is needed to keep using the app.',
+  updateAvailable: 'A new version of Garad AI is available.',
+  update: 'Update',
+  later: 'Later',
+  close: 'Close',
+  menuTitle: 'Garad AI',
+  talkToGarad: 'Talk to Garad',
+  checkForUpdates: 'Check for updates',
+  upToDate: 'You have the latest version.',
+  version: 'Version',
+  back: 'Back',
+  agentMenu: 'Garad agent (beta)',
+  agentTitle: 'Garad agent',
+  agentIntro:
+      'Garad agent lets Garad Voice read your screen and tap or type in apps for you when you ask, for example "open WhatsApp and read me my last message". This is a beta.',
+  agentReadsTitle: 'What it reads',
+  agentReadsBody:
+      'The text and buttons of the app on your screen, only while you are talking to Garad Voice and ask for it. What it reads is sent to Garad Voice to answer you, like your voice is.',
+  agentRulesTitle: 'Safety rules',
+  agentRules: const [
+    'It never reads password fields.',
+    'It does not work in banking, mobile-money (EVC Plus, Zaad, e-Dahab and others) or password apps.',
+    'Before it sends, posts, calls, pays or deletes anything, it waits for you to say "yes" or tap "Yes, do it".',
+    'It does not act in phone settings, the Play Store or the Garad app itself.',
+    'Tap "Garad · Stop" or say "stop" to stop it at once.',
+    'You can turn it off at any time, here or in the phone settings.',
+  ],
+  agentStatusOn: 'On',
+  agentStatusStarting: 'On, starting…',
+  agentStatusOff: 'Off',
+  agentConsent: 'I understand and agree',
+  agentOpenSettings: 'Open Accessibility settings',
+  agentSettingsHint:
+      'In settings, open "Installed apps" (or "Downloaded apps"), choose Garad agent and turn it on. If the switch is greyed out (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", then try again.',
+  agentTurnOff: 'Turn off Garad agent',
+  agentTestTitle: 'Test reading',
+  agentTestHint: 'Press the button, switch to another app (WhatsApp, for example), wait 5 seconds, then come back here.',
+  agentTestButton: 'Read the screen in 5 seconds',
+  agentTestWaiting: 'Waiting…',
+  agentResult: (count, app) => 'Read $count items from $app',
+  agentResultTruncated: 'The list was cut short.',
+  agentReasonBlocked: 'This app is blocked (banking, money or passwords), so it was not read.',
+  agentReasonOff: 'Garad agent is off.',
+  agentReasonNoWindow: 'No screen was found to read. Try again.',
+  agentUnsupported: 'Garad agent is only available on Android for now.',
+  agentRoleButton: 'button',
+  agentRoleField: 'text field',
+  agentMessagesTitle: 'Messages and calls',
+  agentMessagesBody:
+      'If you allow it, Garad can read new messages (WhatsApp, SMS, Telegram and others), reply after you say "yes", tell you who is calling, and answer or decline the call. Messages from banks and mobile money are not read, and one-time codes are hidden.',
+  agentMessagesOn: 'Notification access: on',
+  agentMessagesOff: 'Notification access: off',
+  agentMessagesOpen: 'Open notification access',
+  agentAnnounce: 'Read new messages aloud when Garad Voice is closed',
+);
+
+/// Somali unless the phone is set to English.
+final Strings strings = PlatformDispatcher.instance.locale.languageCode == 'en' ? _en : _so;

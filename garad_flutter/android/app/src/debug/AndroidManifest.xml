@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The INTERNET permission is required for development (hot reload, breakpoints). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug builds only: lets the app open the local XAMPP site over plain http. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

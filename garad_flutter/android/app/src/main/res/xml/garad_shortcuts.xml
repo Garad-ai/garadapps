@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Talk to Garad": long-press the app icon (or pin it) to start Garad Voice straight away. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="talk_to_garad"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/garad_shortcut_talk_short"
+    android:shortcutLongLabel="@string/garad_shortcut_talk_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="garadai://voice"
+      android:targetPackage="ai.garad.app"
+      android:targetClass="ai.garad.app.MainActivity" />
+  </shortcut>
+</shortcuts>

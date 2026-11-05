@@ -1,0 +1,89 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission
+        android:name="android.permission.INTERNET"/>
+    <!-- Chat Pro: photos, voice chat and dictation inside the web page. -->
+    <uses-permission
+        android:name="android.permission.CAMERA"/>
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission
+        android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- The agent shows its Stop pill as an accessibility overlay, never a system alert window. -->
+    <uses-permission
+        android:name="android.permission.SYSTEM_ALERT_WINDOW"
+        tools:node="remove"/>
+    <application
+        android:label="Garad AI"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
+            <!-- garadai:// links are handled by app_links in Dart, not by Flutter's router. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false"/>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/garad_shortcuts"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="garadai"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2"/>
+    </application>
+    <queries>
+        <intent>
+            <action
+                android:name="android.intent.action.PROCESS_TEXT"/>
+            <data
+                android:mimeType="text/plain"/>
+        </intent>
+        <!-- Garad Voice opens these apps and links (lib/agent_actions.dart). -->
+        <intent>
+            <action
+                android:name="android.intent.action.VIEW"/>
+            <data
+                android:scheme="https"/>
+        </intent>
+        <intent>
+            <action
+                android:name="android.intent.action.DIAL"/>
+        </intent>
+        <intent>
+            <action
+                android:name="android.intent.action.SENDTO"/>
+            <data
+                android:scheme="sms"/>
+        </intent>
+        <!-- Voice input in chat (speech_to_text) needs to find the phone's speech recognizer. -->
+        <intent>
+            <action
+                android:name="android.speech.RecognitionService"/>
+        </intent>
+    </queries>
+</manifest>
