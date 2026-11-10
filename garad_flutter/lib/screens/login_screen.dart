@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api/garad_api.dart';
 import '../auth_state.dart';
 import '../auth_strings.dart';
+import '../chat_strings.dart';
 import '../theme.dart';
 
 /// Links shown under the form. Set at build time, e.g.
@@ -49,6 +50,21 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _continueAsGuest() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthState>().continueAsGuest();
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (_busy || !(_form.currentState?.validate() ?? false)) return;
@@ -79,10 +95,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _switchMode() => setState(() {
-        _signUp = !_signUp;
-        _error = null;
-        _form.currentState?.reset();
-      });
+    _signUp = !_signUp;
+    _error = null;
+    _form.currentState?.reset();
+  });
 
   void _soon() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authStrings.comingSoon)));
 
@@ -119,9 +135,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Image.asset('assets/images/splash-icon.png', height: 30, semanticLabel: 'Garad AI'),
                         ),
                         const SizedBox(height: 6),
-                        Text(_signUp ? s.signUp : s.signIn,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text)),
+                        Text(
+                          _signUp ? s.signUp : s.signIn,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
+                        ),
                         const SizedBox(height: 18),
                         OutlinedButton(
                           onPressed: _soon,
@@ -131,23 +149,30 @@ class _LoginScreenState extends State<LoginScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             foregroundColor: c.text,
                           ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Text('G',
-                                style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w800, fontSize: 17)),
-                            const SizedBox(width: 10),
-                            Text(s.googleLogin, style: const TextStyle(fontSize: 13)),
-                          ]),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'G',
+                                style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w800, fontSize: 17),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(s.googleLogin, style: const TextStyle(fontSize: 13)),
+                            ],
+                          ),
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Row(children: [
-                            Expanded(child: Divider(color: c.line)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Text(s.or, style: TextStyle(color: c.faint, fontSize: 11)),
-                            ),
-                            Expanded(child: Divider(color: c.line)),
-                          ]),
+                          child: Row(
+                            children: [
+                              Expanded(child: Divider(color: c.line)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                child: Text(s.or, style: TextStyle(color: c.faint, fontSize: 11)),
+                              ),
+                              Expanded(child: Divider(color: c.line)),
+                            ],
+                          ),
                         ),
                         if (_signUp) ...[
                           _Field(
@@ -203,8 +228,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           obscure: !_showPassword,
                           autofill: _signUp ? AutofillHints.newPassword : AutofillHints.password,
                           suffix: IconButton(
-                            icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                size: 18, color: c.faint),
+                            icon: Icon(
+                              _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 18,
+                              color: c.faint,
+                            ),
                             onPressed: () => setState(() => _showPassword = !_showPassword),
                           ),
                           onSubmitted: _signUp ? null : (_) => _submit(),
@@ -225,25 +253,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             validator: (v) => v != _password.text ? s.passwordsDiffer : null,
                           ),
                         if (!_signUp)
-                          Row(children: [
-                            SizedBox.square(
-                              dimension: 22,
-                              child: Checkbox(
-                                value: _remember,
-                                activeColor: c.brand,
-                                visualDensity: VisualDensity.compact,
-                                onChanged: (v) => setState(() => _remember = v ?? true),
+                          Row(
+                            children: [
+                              SizedBox.square(
+                                dimension: 22,
+                                child: Checkbox(
+                                  value: _remember,
+                                  activeColor: c.brand,
+                                  visualDensity: VisualDensity.compact,
+                                  onChanged: (v) => setState(() => _remember = v ?? true),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(s.rememberMe, style: TextStyle(fontSize: 12, color: c.muted)),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _soon,
-                              style: TextButton.styleFrom(foregroundColor: c.brand, padding: EdgeInsets.zero),
-                              child: Text(s.forgotPassword, style: const TextStyle(fontSize: 12)),
-                            ),
-                          ]),
+                              const SizedBox(width: 8),
+                              Text(s.rememberMe, style: TextStyle(fontSize: 12, color: c.muted)),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: _soon,
+                                style: TextButton.styleFrom(foregroundColor: c.brand, padding: EdgeInsets.zero),
+                                child: Text(s.forgotPassword, style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
                         if (_error != null) ...[
                           const SizedBox(height: 8),
                           Text(_error!, style: TextStyle(color: c.danger, fontSize: 13)),
@@ -260,25 +290,48 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: _busy
                               ? const SizedBox.square(
                                   dimension: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                              : Text(_signUp ? s.signUp : s.signIn,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                )
+                              : Text(
+                                  _signUp ? s.signUp : s.signIn,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                                ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Chat without an account, ChatGPT style (limited messages, no files or images).
+                        OutlinedButton(
+                          onPressed: _busy ? null : _continueAsGuest,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: c.text,
+                            minimumSize: const Size.fromHeight(48),
+                            shape: const StadiumBorder(),
+                            side: BorderSide(color: c.line),
+                          ),
+                          child: Text(chatStrings.continueWithoutAccount),
                         ),
                         const SizedBox(height: 14),
-                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Text(_signUp ? s.haveAccount : s.noAccount, style: TextStyle(fontSize: 12, color: c.muted)),
-                          TextButton(
-                            onPressed: _busy ? null : _switchMode,
-                            style: TextButton.styleFrom(foregroundColor: c.brand),
-                            child: Text(_signUp ? s.signIn : s.signUp, style: const TextStyle(fontSize: 12)),
-                          ),
-                        ]),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(_signUp ? s.haveAccount : s.noAccount, style: TextStyle(fontSize: 12, color: c.muted)),
+                            TextButton(
+                              onPressed: _busy ? null : _switchMode,
+                              style: TextButton.styleFrom(foregroundColor: c.brand),
+                              child: Text(_signUp ? s.signIn : s.signUp, style: const TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 8),
-                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.lock, size: 13, color: c.muted),
-                          const SizedBox(width: 6),
-                          Flexible(child: Text(s.dataSafe, style: TextStyle(fontSize: 11.5, color: c.muted))),
-                        ]),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.lock, size: 13, color: c.muted),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(s.dataSafe, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 10),
                         Text.rich(
                           TextSpan(
@@ -305,10 +358,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   TextSpan _link(String text, String url, Palette c) => TextSpan(
-        text: text,
-        style: TextStyle(color: c.text, decoration: TextDecoration.underline),
-        recognizer: url.isEmpty ? null : (TapGestureRecognizer()..onTap = () => _open(url)),
-      );
+    text: text,
+    style: TextStyle(color: c.text, decoration: TextDecoration.underline),
+    recognizer: url.isEmpty ? null : (TapGestureRecognizer()..onTap = () => _open(url)),
+  );
 }
 
 /// Label above a rounded text box, as in the web design.
@@ -338,36 +391,44 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Palette.of(context);
-    OutlineInputBorder border(Color color) =>
-        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: color));
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: color),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.text)),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboard,
-          obscureText: obscure,
-          autocorrect: false,
-          autofillHints: autofill == null ? null : [autofill!],
-          textInputAction: onSubmitted == null ? TextInputAction.next : TextInputAction.done,
-          onFieldSubmitted: onSubmitted,
-          style: TextStyle(fontSize: 14, color: c.text),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: hint,
-            hintStyle: TextStyle(color: c.faint, fontSize: 13),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            suffixIcon: suffix,
-            enabledBorder: border(c.line),
-            focusedBorder: border(c.brand),
-            errorBorder: border(c.danger),
-            focusedErrorBorder: border(c.danger),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.text),
           ),
-        ),
-      ]),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: controller,
+            validator: validator,
+            keyboardType: keyboard,
+            obscureText: obscure,
+            autocorrect: false,
+            autofillHints: autofill == null ? null : [autofill!],
+            textInputAction: onSubmitted == null ? TextInputAction.next : TextInputAction.done,
+            onFieldSubmitted: onSubmitted,
+            style: TextStyle(fontSize: 14, color: c.text),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hint,
+              hintStyle: TextStyle(color: c.faint, fontSize: 13),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              suffixIcon: suffix,
+              enabledBorder: border(c.line),
+              focusedBorder: border(c.brand),
+              errorBorder: border(c.danger),
+              focusedErrorBorder: border(c.danger),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

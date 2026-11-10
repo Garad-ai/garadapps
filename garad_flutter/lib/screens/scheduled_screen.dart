@@ -46,20 +46,28 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // The last list straight away (no spinner), then a fresh one.
+    final cached = _api.cachedTasks;
+    if (cached != null) {
+      _all = cached;
+      _loading = false;
+    }
+    _load(runDue: true);
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// [runDue]: afterwards, fire anything overdue in the background (no-op where cron runs)
+  /// and refresh again if it ran — the list itself never waits for it.
+  Future<void> _load({bool runDue = false}) async {
+    setState(() => _error = null);
     try {
-      // Fire anything overdue first, so the statuses are current (no-op where cron runs).
-      await _api.runDueTasks();
       final result = await _api.tasks();
       if (!mounted) return;
       setState(() => _all = result.items);
+      if (runDue) {
+        _api.runDueTasks().then((ran) {
+          if (ran && mounted) _load();
+        }, onError: (_) {});
+      }
       final id = widget.highlightId;
       if (id != null && !_openedHighlight) {
         _openedHighlight = true;
@@ -316,12 +324,10 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
               ],
             ),
             const SizedBox(height: 14),
+            // First load only (a fraction of a second): leave the space quiet instead of a spinner.
             if (_loading && _all.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
+              const SizedBox(height: 40)
+            else if (_error != null && _all.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Center(

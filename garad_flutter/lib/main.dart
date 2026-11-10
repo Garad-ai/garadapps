@@ -5,6 +5,7 @@ import 'package:device_preview/device_preview.dart';
 import 'package:device_preview/presets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +22,13 @@ Future<void> main() async {
   // simulate other devices (size, notch, text scale, …) from DevTools. Off in release builds.
   final binding = DevicePreview.enable();
 
+  // The bundled Source Serif 4 font's license, on the app's licenses page.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Source Serif 4',
+    ], await rootBundle.loadString('assets/fonts/SourceSerif4-OFL.txt'));
+  });
+
   // In Chrome or on a desktop, start inside a phone frame so the layout looks like the real
   // app. On a real phone, no preset: the device's own screen is the one to test.
   final preview = DevicePreview.maybeController;
@@ -32,7 +40,7 @@ Future<void> main() async {
         TargetPlatform.linux,
       }.contains(defaultTargetPlatform);
   if (preview != null && onBigScreen) {
-    unawaited(preview.applyPreset(DevicePresets.galaxyS24));
+    unawaited(preview.applyPreset(DevicePresets.iPhone17Pro));
   }
   // The splash screen stays up until the saved login has been read (see _AuthGate).
   FlutterNativeSplash.preserve(widgetsBinding: binding);
@@ -45,6 +53,7 @@ Future<void> main() async {
   final openVoice = initialLink?.host == 'voice';
 
   final state = AppState(appVersion: info.version);
+  unawaited(state.loadThemeMode());
   // The stream replays the launch link once when we start listening; skip only that replay
   // (it is already handled by `openVoice`). Every later tap is the same URI, so comparing
   // against `initialLink` would ignore repeat taps on the shortcut.
@@ -111,6 +120,7 @@ class GaradApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: _theme(Palette.light, Brightness.light),
       darkTheme: _theme(Palette.dark, Brightness.dark),
+      themeMode: context.select<AppState, ThemeMode>((s) => s.themeMode),
       home: _AuthGate(openVoice: openVoice),
     );
   }

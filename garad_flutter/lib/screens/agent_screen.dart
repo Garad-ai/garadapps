@@ -42,11 +42,13 @@ class _AgentScreenState extends State<AgentScreen> {
     });
     // The user turns the service on in system settings, so re-check whenever Garad comes back.
     // The service connects a moment after it is switched on, hence the second check.
-    _lifecycle = AppLifecycleListener(onResume: () {
-      _refresh();
-      _recheck?.cancel();
-      _recheck = Timer(const Duration(milliseconds: 1200), _refresh);
-    });
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        _refresh();
+        _recheck?.cancel();
+        _recheck = Timer(const Duration(milliseconds: 1200), _refresh);
+      },
+    );
   }
 
   @override
@@ -94,27 +96,27 @@ class _AgentScreenState extends State<AgentScreen> {
     final cardTitle = TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w700);
 
     Widget card(List<Widget> children) => Container(
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: c.line, width: 0.5),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 8), children[i]],
-            ],
-          ),
-        );
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.line, width: 0.5),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 8), children[i]],
+        ],
+      ),
+    );
 
     Widget heading(String text) => Semantics(header: true, child: Text(text, style: cardTitle));
 
     Widget dot(Color color) => Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        );
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
 
     final statusLabel = switch (_status) {
       _Status.on => strings.agentStatusOn,
@@ -134,7 +136,10 @@ class _AgentScreenState extends State<AgentScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('•  ', style: body.copyWith(color: c.brand, fontWeight: FontWeight.w700)),
+                Text(
+                  '•  ',
+                  style: body.copyWith(color: c.brand, fontWeight: FontWeight.w700),
+                ),
                 Expanded(child: Text(rule, style: body)),
               ],
             ),
@@ -142,11 +147,17 @@ class _AgentScreenState extends State<AgentScreen> {
         Semantics(
           liveRegion: true,
           child: card([
-            Row(children: [
-              dot(switch (_status) { _Status.on => _green, _Status.starting => _amber, _Status.off => c.faint }),
-              const SizedBox(width: 10),
-              Expanded(child: Text('${strings.agentTitle}: $statusLabel', style: cardTitle)),
-            ]),
+            Row(
+              children: [
+                dot(switch (_status) {
+                  _Status.on => _green,
+                  _Status.starting => _amber,
+                  _Status.off => c.faint,
+                }),
+                const SizedBox(width: 10),
+                Expanded(child: Text('${strings.agentTitle}: $statusLabel', style: cardTitle)),
+              ],
+            ),
           ]),
         ),
         if (_status == _Status.off) ...[
@@ -156,8 +167,10 @@ class _AgentScreenState extends State<AgentScreen> {
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             activeColor: c.brand,
-            title: Text(strings.agentConsent,
-                style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w500)),
+            title: Text(
+              strings.agentConsent,
+              style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w500),
+            ),
           ),
           _PrimaryButton(
             label: strings.agentOpenSettings,
@@ -190,14 +203,18 @@ class _AgentScreenState extends State<AgentScreen> {
           Text(strings.agentMessagesBody, style: body),
           Semantics(
             liveRegion: true,
-            child: Row(children: [
-              dot(_notifications ? _green : c.faint),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(_notifications ? strings.agentMessagesOn : strings.agentMessagesOff,
-                    style: body.copyWith(color: c.text)),
-              ),
-            ]),
+            child: Row(
+              children: [
+                dot(_notifications ? _green : c.faint),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _notifications ? strings.agentMessagesOn : strings.agentMessagesOff,
+                    style: body.copyWith(color: c.text),
+                  ),
+                ),
+              ],
+            ),
           ),
           _SecondaryButton(
             label: strings.agentMessagesOpen,
@@ -270,24 +287,27 @@ class _ReadResultView extends StatelessWidget {
       children: [
         const SizedBox(height: 4),
         Text(strings.agentResult(result.elements.length, result.packageName ?? '?'), style: summary),
-        if (result.truncated)
-          Text(strings.agentResultTruncated, style: TextStyle(color: c.muted, fontSize: 13)),
+        if (result.truncated) Text(strings.agentResultTruncated, style: TextStyle(color: c.muted, fontSize: 13)),
         for (final element in shown)
           Container(
             margin: const EdgeInsets.only(top: 6),
             padding: const EdgeInsets.only(top: 6),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line, width: 0.5))),
-            child: Text.rich(TextSpan(
-              style: TextStyle(color: c.muted, fontSize: 14, height: 1.4),
-              children: [
-                if (element.editable || element.clickable)
-                  TextSpan(
-                    text: '[${element.editable ? strings.agentRoleField : strings.agentRoleButton}] ',
-                    style: TextStyle(color: c.brand),
-                  ),
-                TextSpan(text: (element.text ?? '').isNotEmpty ? element.text : element.description),
-              ],
-            )),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: c.line, width: 0.5)),
+            ),
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(color: c.muted, fontSize: 14, height: 1.4),
+                children: [
+                  if (element.editable || element.clickable)
+                    TextSpan(
+                      text: '[${element.editable ? strings.agentRoleField : strings.agentRoleButton}] ',
+                      style: TextStyle(color: c.brand),
+                    ),
+                  TextSpan(text: (element.text ?? '').isNotEmpty ? element.text : element.description),
+                ],
+              ),
+            ),
           ),
       ],
     );

@@ -51,15 +51,15 @@ final Map<String, List<String> Function(String search)> _appLinks = {
   'snapchat': (_) => ['snapchat://', 'https://www.snapchat.com'],
   'gmail': (_) => ['googlegmail://', 'https://mail.google.com'],
   'maps': (search) => [
-        _isIOS ? 'maps://?q=${_encode(search)}' : 'geo:0,0?q=${_encode(search)}',
-        'https://www.google.com/maps/search/?api=1&query=${_encode(search)}',
-      ],
+    _isIOS ? 'maps://?q=${_encode(search)}' : 'geo:0,0?q=${_encode(search)}',
+    'https://www.google.com/maps/search/?api=1&query=${_encode(search)}',
+  ],
   'phone': (_) => ['tel:'],
   'messages': (_) => ['sms:'],
   'play_store': (search) => [
-        'market://search?q=${_encode(search)}&c=apps',
-        'https://play.google.com/store/search?q=${_encode(search)}&c=apps',
-      ],
+    'market://search?q=${_encode(search)}&c=apps',
+    'https://play.google.com/store/search?q=${_encode(search)}&c=apps',
+  ],
 };
 
 Future<ActionResult> runAgentAction(String name, Map<String, Object?> args) async {
@@ -95,9 +95,11 @@ Future<ActionResult> runAgentAction(String name, Map<String, Object?> args) asyn
     case 'send_whatsapp_message':
       final number = _phoneNumber(args['phone_number']).replaceAll('+', '');
       final message = _encode(_text(args['message']));
-      final opened = await _openFirst(number.isNotEmpty
-          ? ['whatsapp://send?phone=$number&text=$message', 'https://wa.me/$number?text=$message']
-          : ['whatsapp://send?text=$message', 'https://wa.me/?text=$message']);
+      final opened = await _openFirst(
+        number.isNotEmpty
+            ? ['whatsapp://send?phone=$number&text=$message', 'https://wa.me/$number?text=$message']
+            : ['whatsapp://send?text=$message', 'https://wa.me/?text=$message'],
+      );
       if (!opened) return _result(false, 'WhatsApp could not be opened on this phone.');
       return _result(
         true,

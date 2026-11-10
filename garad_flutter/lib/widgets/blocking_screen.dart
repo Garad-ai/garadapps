@@ -41,7 +41,11 @@ class BlockingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(body, textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontSize: 15, height: 1.4)),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.muted, fontSize: 15, height: 1.4),
+              ),
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: 24),
                 FilledButton(

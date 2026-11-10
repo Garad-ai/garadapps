@@ -52,6 +52,14 @@ dependencies:
   speech_to_text: ^7.5.0
   flutter_markdown_plus: ^1.0.12
   flutter_timezone: ^5.1.1
+  camera: ^0.12.2
+  image_picker: ^1.2.4
+  fetch_client: ^1.2.1
+  audioplayers: ^6.8.1
+  web: ^1.1.2
+  gal: ^2.3.3
+  file_picker: ^13.3.2
+  highlight: ^0.7.0
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +87,20 @@ flutter:
   assets:
     - assets/images/splash-icon.png
     - assets/images/wordmark.png
+    - assets/fonts/SourceSerif4-OFL.txt
+
+  # Answers and document previews use a serif like Claude's (Source Serif 4, SIL Open Font License:
+  # assets/fonts/SourceSerif4-OFL.txt).
+  fonts:
+    - family: SourceSerif
+      fonts:
+        - asset: assets/fonts/SourceSerif4-Regular.ttf
+        - asset: assets/fonts/SourceSerif4-It.ttf
+          style: italic
+        - asset: assets/fonts/SourceSerif4-Semibold.ttf
+          weight: 600
+        - asset: assets/fonts/SourceSerif4-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

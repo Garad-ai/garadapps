@@ -211,8 +211,7 @@ const String _bridgeScript = r'''
 const String _agentFlag = 'window.__garadAgent = { screen: true };';
 
 /// The script injected at document start, with the agent flag on builds that have the agent.
-String documentStartScript({required bool agent}) =>
-    [_messageShim, _bridgeScript, if (agent) _agentFlag].join('\n');
+String documentStartScript({required bool agent}) => [_messageShim, _bridgeScript, if (agent) _agentFlag].join('\n');
 
 /// Makes a name safe to use as a file name on Android and iOS.
 String _safeFileName(String name) {
@@ -227,7 +226,10 @@ Future<void> saveDownload(String name, String mime, String base64Data) async {
   final file = File('${directory.path}${Platform.pathSeparator}${_safeFileName(name)}');
   await file.writeAsBytes(base64Decode(base64Data), flush: true);
   await SharePlus.instance.share(
-    ShareParams(files: [XFile(file.path, mimeType: mime)], title: _safeFileName(name)),
+    ShareParams(
+      files: [XFile(file.path, mimeType: mime)],
+      title: _safeFileName(name),
+    ),
   );
 }
 

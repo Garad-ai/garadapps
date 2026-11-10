@@ -33,12 +33,27 @@ class TaskCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: status, style: TextStyle(color: task.status == 'failed' ? c.danger : c.muted)),
-                  TextSpan(text: '  ·  ', style: TextStyle(color: c.faint)),
-                  TextSpan(text: task.title, style: TextStyle(color: c.text, fontWeight: FontWeight.w500)),
-                  if (time != null) TextSpan(text: '  ·  $time', style: TextStyle(color: c.muted)),
-                ]),
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: status,
+                      style: TextStyle(color: task.status == 'failed' ? c.danger : c.muted),
+                    ),
+                    TextSpan(
+                      text: '  ·  ',
+                      style: TextStyle(color: c.faint),
+                    ),
+                    TextSpan(
+                      text: task.title,
+                      style: TextStyle(color: c.text, fontWeight: FontWeight.w500),
+                    ),
+                    if (time != null)
+                      TextSpan(
+                        text: '  ·  $time',
+                        style: TextStyle(color: c.muted),
+                      ),
+                  ],
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -36,6 +37,15 @@ class AuthState extends ChangeNotifier {
       // Unreadable storage (e.g. after an OS restore): start signed out.
       await _clear();
     }
+    // First launch (never signed in or out): straight into the chat as a guest, like ChatGPT.
+    // Offline or refused: the login screen, which also offers "Continue without an account".
+    if (user == null && await _storage.read(key: _signedOutKey) == null) {
+      try {
+        await continueAsGuest();
+      } on ApiException {
+        // Show the login screen.
+      }
+    }
     ready = true;
     notifyListeners();
 
@@ -48,6 +58,31 @@ class AuthState extends ChangeNotifier {
         // Offline keeps the saved login; a 401 already signed out via onUnauthorized.
       }
     }
+  }
+
+  static const _deviceKey = 'garad_device_id';
+  static const _signedOutKey = 'garad_signed_out';
+
+  bool get isGuest => user?.guest ?? false;
+
+  /// Chat without an account. One guest per phone (a random id kept on the phone), so its daily
+  /// message limit carries over between app starts.
+  Future<void> continueAsGuest() async {
+    var deviceId = await _storage.read(key: _deviceKey);
+    if (deviceId == null) {
+      final random = Random.secure();
+      deviceId = List.generate(32, (_) => random.nextInt(16).toRadixString(16)).join();
+      await _storage.write(key: _deviceKey, value: deviceId);
+    }
+    final result = await api.guest(deviceId);
+    await _save(result.token, result.user);
+  }
+
+  /// A guest taps "Log in": the login / sign-up screen (the guest's chats stay with the guest).
+  Future<void> leaveGuest() async {
+    await _clear();
+    await _storage.write(key: _signedOutKey, value: '1');
+    notifyListeners();
   }
 
   /// [remember] false keeps the login only until the app is closed.
@@ -84,12 +119,15 @@ class AuthState extends ChangeNotifier {
       // Signing out locally is what matters; the server token expires unused.
     }
     await _clear();
+    // Signed out on purpose: the next start shows the login screen, not a guest chat.
+    await _storage.write(key: _signedOutKey, value: '1');
     notifyListeners();
   }
 
   Future<void> _save(String token, GaradUser newUser, {bool remember = true}) async {
     api.token = token;
     user = newUser;
+    if (!newUser.guest) await _storage.delete(key: _signedOutKey);
     if (remember) {
       await _storage.write(key: _tokenKey, value: token);
       await _storage.write(key: _userKey, value: jsonEncode(newUser.toJson()));
@@ -108,6 +146,7 @@ class AuthState extends ChangeNotifier {
 
   Future<void> _clear() async {
     api.token = null;
+    api.clearCache();
     user = null;
     try {
       await _storage.delete(key: _tokenKey);

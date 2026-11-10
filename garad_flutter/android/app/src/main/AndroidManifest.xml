@@ -9,6 +9,11 @@
         android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission
         android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Save an image to the gallery (gal): needed only on Android 10 and older. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
+        tools:replace="android:maxSdkVersion"/>
     <!-- The agent shows its Stop pill as an accessibility overlay, never a system alert window. -->
     <uses-permission
         android:name="android.permission.SYSTEM_ALERT_WINDOW"
@@ -16,6 +21,7 @@
     <application
         android:label="Garad AI"
         android:name="${applicationName}"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

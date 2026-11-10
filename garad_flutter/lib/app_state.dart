@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'remote_config.dart';
 
@@ -51,5 +52,32 @@ class AppState extends ChangeNotifier {
   void requestVoice() {
     voiceRequest++;
     notifyListeners();
+  }
+
+  // ---- Appearance (Settings → Light / Dark / System), remembered on this device ----
+
+  static const _storage = FlutterSecureStorage();
+  static const _themeKey = 'garad_theme_mode';
+
+  ThemeMode themeMode = ThemeMode.system;
+
+  Future<void> loadThemeMode() async {
+    try {
+      final saved = await _storage.read(key: _themeKey);
+      final mode = ThemeMode.values.where((m) => m.name == saved).firstOrNull;
+      if (mode != null && mode != themeMode) {
+        themeMode = mode;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Unreadable storage: keep following the phone's setting.
+    }
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    if (mode == themeMode) return;
+    themeMode = mode;
+    notifyListeners();
+    _storage.write(key: _themeKey, value: mode.name).catchError((_) {});
   }
 }

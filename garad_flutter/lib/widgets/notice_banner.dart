@@ -32,11 +32,16 @@ class NoticeBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Row(
           children: [
-            Expanded(child: Text(message, style: TextStyle(color: c.text, fontSize: 14, height: 1.35))),
+            Expanded(
+              child: Text(message, style: TextStyle(color: c.text, fontSize: 14, height: 1.35)),
+            ),
             if (actionLabel != null && onAction != null)
               TextButton(
                 onPressed: onAction,
-                child: Text(actionLabel!, style: TextStyle(color: c.brand, fontWeight: FontWeight.w700)),
+                child: Text(
+                  actionLabel!,
+                  style: TextStyle(color: c.brand, fontWeight: FontWeight.w700),
+                ),
               ),
             IconButton(
               tooltip: dismissLabel,

@@ -50,6 +50,8 @@
 		<string>Garad AI uses the microphone for voice chat and dictation.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Garad AI uses your photos so you can attach images to a chat.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>Garad AI saves images you create to your photos when you tap Save.</string>
 		<!-- Voice input in chat (speech_to_text). -->
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>Garad AI turns your speech into text so you can talk to Garad.</string>

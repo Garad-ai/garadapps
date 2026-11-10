@@ -128,11 +128,9 @@ final Strings _so = Strings._(
   back: 'Dib u noqo',
   agentMenu: 'Garad agent (tijaabo)',
   agentTitle: 'Garad agent',
-  agentIntro:
-      'Garad agent wuxuu Garad Voice u oggolaanayaa inuu akhriyo shaashaddaada, uuna kuu riixo ama kuu qoro apps-ka marka aad codsato, tusaale: "fur WhatsApp oo ii akhri fariinta ugu dambeysay". Waa tijaabo.',
+  agentIntro: 'Garad agent wuxuu Garad Voice u oggolaanayaa inuu akhriyo shaashaddaada, uuna kuu riixo ama kuu qoro apps-ka marka aad codsato, tusaale: "fur WhatsApp oo ii akhri fariinta ugu dambeysay". Waa tijaabo.',
   agentReadsTitle: 'Waxa uu akhriyo',
-  agentReadsBody:
-      'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya inta aad Garad Voice la hadlayso oo aad codsato. Waxa la akhriyo waxaa loo diraa Garad Voice si uu kuugu jawaabo, sida hadalkaaga oo kale.',
+  agentReadsBody: 'Qoraallada iyo badhamada app-ka shaashadda ku jira, kaliya inta aad Garad Voice la hadlayso oo aad codsato. Waxa la akhriyo waxaa loo diraa Garad Voice si uu kuugu jawaabo, sida hadalkaaga oo kale.',
   agentRulesTitle: 'Xeerarka ammaanka',
   agentRules: const [
     'Meelaha password-ka weligiis ma akhriyo.',
@@ -147,8 +145,7 @@ final Strings _so = Strings._(
   agentStatusOff: 'Wuu dansan yahay',
   agentConsent: 'Waan fahmay oo waan oggolahay',
   agentOpenSettings: 'Fur Settings-ka Accessibility',
-  agentSettingsHint:
-      'Settings-ka, fur "Installed apps" (ama "Downloaded apps"), dooro Garad agent, kadibna shid. Haddii uu xiran yahay (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", kadib mar kale isku day.',
+  agentSettingsHint: 'Settings-ka, fur "Installed apps" (ama "Downloaded apps"), dooro Garad agent, kadibna shid. Haddii uu xiran yahay (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", kadib mar kale isku day.',
   agentTurnOff: 'Dami Garad agent',
   agentTestTitle: 'Tijaabi akhriska',
   agentTestHint: 'Riix badhanka, u gudub app kale (tusaale WhatsApp), sug 5 ilbiriqsi, kadibna halkan ku soo laabo.',
@@ -163,8 +160,7 @@ final Strings _so = Strings._(
   agentRoleButton: 'badhan',
   agentRoleField: 'meel wax lagu qoro',
   agentMessagesTitle: 'Fariimaha iyo wicitaannada',
-  agentMessagesBody:
-      'Haddii aad oggolaato, Garad wuxuu akhrin karaa fariimaha cusub (WhatsApp, SMS, Telegram iyo kuwa kale), kaaga jawaabi karaa marka aad "haa" dhahdo, wuxuuna kuu sheegi karaa cidda ku soo wacaysa, kuuna qaadi karaa ama diidi karaa wicitaanka. Fariimaha bangiyada iyo lacagta lama akhriyo, koodhadhka (OTP) waa la qariyaa.',
+  agentMessagesBody: 'Haddii aad oggolaato, Garad wuxuu akhrin karaa fariimaha cusub (WhatsApp, SMS, Telegram iyo kuwa kale), kaaga jawaabi karaa marka aad "haa" dhahdo, wuxuuna kuu sheegi karaa cidda ku soo wacaysa, kuuna qaadi karaa ama diidi karaa wicitaanka. Fariimaha bangiyada iyo lacagta lama akhriyo, koodhadhka (OTP) waa la qariyaa.',
   agentMessagesOn: 'Oggolaanshaha ogeysiisyada: shidan',
   agentMessagesOff: 'Oggolaanshaha ogeysiisyada: dansan',
   agentMessagesOpen: 'Fur oggolaanshaha ogeysiisyada',
@@ -192,11 +188,9 @@ final Strings _en = Strings._(
   back: 'Back',
   agentMenu: 'Garad agent (beta)',
   agentTitle: 'Garad agent',
-  agentIntro:
-      'Garad agent lets Garad Voice read your screen and tap or type in apps for you when you ask, for example "open WhatsApp and read me my last message". This is a beta.',
+  agentIntro: 'Garad agent lets Garad Voice read your screen and tap or type in apps for you when you ask, for example "open WhatsApp and read me my last message". This is a beta.',
   agentReadsTitle: 'What it reads',
-  agentReadsBody:
-      'The text and buttons of the app on your screen, only while you are talking to Garad Voice and ask for it. What it reads is sent to Garad Voice to answer you, like your voice is.',
+  agentReadsBody: 'The text and buttons of the app on your screen, only while you are talking to Garad Voice and ask for it. What it reads is sent to Garad Voice to answer you, like your voice is.',
   agentRulesTitle: 'Safety rules',
   agentRules: const [
     'It never reads password fields.',
@@ -211,11 +205,11 @@ final Strings _en = Strings._(
   agentStatusOff: 'Off',
   agentConsent: 'I understand and agree',
   agentOpenSettings: 'Open Accessibility settings',
-  agentSettingsHint:
-      'In settings, open "Installed apps" (or "Downloaded apps"), choose Garad agent and turn it on. If the switch is greyed out (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", then try again.',
+  agentSettingsHint: 'In settings, open "Installed apps" (or "Downloaded apps"), choose Garad agent and turn it on. If the switch is greyed out (Android 13+): App info › Garad AI › ⋮ › "Allow restricted settings", then try again.',
   agentTurnOff: 'Turn off Garad agent',
   agentTestTitle: 'Test reading',
-  agentTestHint: 'Press the button, switch to another app (WhatsApp, for example), wait 5 seconds, then come back here.',
+  agentTestHint:
+      'Press the button, switch to another app (WhatsApp, for example), wait 5 seconds, then come back here.',
   agentTestButton: 'Read the screen in 5 seconds',
   agentTestWaiting: 'Waiting…',
   agentResult: (count, app) => 'Read $count items from $app',
@@ -227,8 +221,7 @@ final Strings _en = Strings._(
   agentRoleButton: 'button',
   agentRoleField: 'text field',
   agentMessagesTitle: 'Messages and calls',
-  agentMessagesBody:
-      'If you allow it, Garad can read new messages (WhatsApp, SMS, Telegram and others), reply after you say "yes", tell you who is calling, and answer or decline the call. Messages from banks and mobile money are not read, and one-time codes are hidden.',
+  agentMessagesBody: 'If you allow it, Garad can read new messages (WhatsApp, SMS, Telegram and others), reply after you say "yes", tell you who is calling, and answer or decline the call. Messages from banks and mobile money are not read, and one-time codes are hidden.',
   agentMessagesOn: 'Notification access: on',
   agentMessagesOff: 'Notification access: off',
   agentMessagesOpen: 'Open notification access',

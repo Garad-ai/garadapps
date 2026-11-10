@@ -27,10 +27,10 @@ import 'agent_screen.dart';
 void openExternally(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) return;
-  final web = RegExp(r'^https?:', caseSensitive: false).hasMatch(url) &&
+  final web =
+      RegExp(r'^https?:', caseSensitive: false).hasMatch(url) &&
       !RegExp(r'^https://wa\.me/', caseSensitive: false).hasMatch(url);
-  launchUrl(uri, mode: web ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication)
-      .catchError((_) => false);
+  launchUrl(uri, mode: web ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication).catchError((_) => false);
 }
 
 /// The Garad AI app: the garad.ai web app (Chat Pro) in a native shell, so the app has exactly
@@ -131,8 +131,11 @@ class _HomeScreenState extends State<HomeScreen> {
             : runAgentAction(name, args);
         run
             .catchError((_) => <String, Object?>{'ok': false, 'message': 'The action failed on the phone.'})
-            .then((result) => _runInPage(
-                'window.__garadAgentResult && window.__garadAgentResult(${jsonEncode(id)}, ${jsonEncode(result)});'));
+            .then(
+              (result) => _runInPage(
+                'window.__garadAgentResult && window.__garadAgentResult(${jsonEncode(id)}, ${jsonEncode(result)});',
+              ),
+            );
 
       case 'openAppMenu':
         _openMenu();
@@ -155,7 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
           language: message['lang'] is String ? message['lang']! as String : null,
           rate: message['rate'] is num ? (message['rate']! as num).toDouble() : null,
           notify: (event) => _webView?.evaluateJavascript(
-              source: 'window.__garadSpeech && window.__garadSpeech(${jsonEncode(event)});'),
+            source: 'window.__garadSpeech && window.__garadSpeech(${jsonEncode(event)});',
+          ),
         );
 
       case 'speakStop':
@@ -215,7 +219,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<NavigationActionPolicy> _shouldOverrideUrlLoading(
-      InAppWebViewController controller, NavigationAction action) async {
+    InAppWebViewController controller,
+    NavigationAction action,
+  ) async {
     final url = action.request.url?.toString() ?? '';
     if (url.startsWith('about:') || url.startsWith('blob:') || url.startsWith('data:')) {
       return NavigationActionPolicy.ALLOW;
@@ -228,8 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Camera and microphone for the site itself (photos, voice chat, dictation); others are denied.
-  Future<PermissionResponse> _onPermissionRequest(
-      InAppWebViewController controller, PermissionRequest request) async {
+  Future<PermissionResponse> _onPermissionRequest(InAppWebViewController controller, PermissionRequest request) async {
     final allowed = isSiteUrl(request.origin.toString());
     if (allowed && !kIsWeb) {
       final wanted = <Permission>[
@@ -355,7 +360,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   // through the same save/share bridge as Chat Pro's own downloads.
                   onDownloadStartRequest: (controller, request) async {
                     await controller.evaluateJavascript(
-                        source: 'window.__garadDownload && window.__garadDownload(${jsonEncode(request.url.toString())});');
+                      source:
+                          'window.__garadDownload && window.__garadDownload(${jsonEncode(request.url.toString())});',
+                    );
                   },
                   onRenderProcessGone: (controller, _) => controller.reload(),
                   onWebContentProcessDidTerminate: (controller) => controller.reload(),

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +6,9 @@ import '../api/models.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../theme.dart';
+import '../widgets/chat_menu.dart';
+import '../widgets/chat_search_sheet.dart';
+import 'settings_screen.dart';
 
 /// The side menu: new chat, search, pinned chats, recent chats and the signed-in user.
 /// It is rebuilt each time it opens, so the lists are always fresh.
@@ -18,7 +19,15 @@ class ChatDrawer extends StatefulWidget {
     required this.onSelect,
     required this.onChanged,
     required this.onOpenScheduled,
+    required this.onOpenLibrary,
+    required this.onOpenArtifacts,
   });
+
+  /// Opens the Library (images created in chats).
+  final VoidCallback onOpenLibrary;
+
+  /// Opens Artifacts (the apps and websites Garad built).
+  final VoidCallback onOpenArtifacts;
 
   /// Opens the Scheduled screen.
   final VoidCallback onOpenScheduled;
@@ -37,17 +46,11 @@ class ChatDrawer extends StatefulWidget {
 }
 
 class _ChatDrawerState extends State<ChatDrawer> {
-  final _search = TextEditingController();
-  Timer? _debounce;
-
   List<ConversationSummary> _pinned = [];
   final List<ConversationSummary> _recents = [];
   int? _nextPage;
   bool _loading = true;
   bool _loadingMore = false;
-  bool _pinnedOpen = true;
-  bool _recentsOpen = true;
-  bool _searchOpen = false;
   bool _showAll = false;
 
   /// Recents shown before "See all…".
@@ -55,44 +58,46 @@ class _ChatDrawerState extends State<ChatDrawer> {
   String? _error;
 
   GaradApi get _api => context.read<AuthState>().api;
-  bool get _searching => _search.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    // Show the last list straight away (no spinner), then refresh it.
+    final cached = _api.cachedChats;
+    if (cached != null) {
+      _pinned = List.of(cached.pinned);
+      _recents.addAll(cached.recents);
+      _nextPage = cached.nextPage;
+      _loading = false;
+    }
+    _load(quiet: cached != null);
   }
 
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _search.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final query = _search.text;
-      final results = await Future.wait([
-        _searching ? Future.value(null) : _api.conversations(pinnedOnly: true),
-        _api.conversations(search: query),
-      ]);
-      if (!mounted || query != _search.text) return;
+  /// [quiet]: the list is already on screen; refresh it without a spinner.
+  Future<void> _load({bool quiet = false}) async {
+    if (!quiet) {
       setState(() {
-        _pinned = results[0]?.items ?? [];
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final results = await Future.wait([_api.conversations(pinnedOnly: true), _api.conversations()]);
+      if (!mounted) return;
+      setState(() {
+        _pinned = results[0].items;
         final pinnedIds = {for (final c in _pinned) c.id};
+        // Pinned chats live in their own section.
         _recents
           ..clear()
-          // While searching, show every match together; otherwise pinned chats live in their own section.
-          ..addAll(results[1]!.items.where((c) => _searching || !pinnedIds.contains(c.id)));
-        _nextPage = results[1]!.nextPage;
+          ..addAll(results[1].items.where((c) => !pinnedIds.contains(c.id)));
+        _nextPage = results[1].nextPage;
+        _error = null;
       });
+      _api.cachedChats = (pinned: List.of(_pinned), recents: List.of(_recents), nextPage: _nextPage);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      // With a list already on screen, keep it rather than replacing it with an error.
+      if (mounted && (_recents.isEmpty && _pinned.isEmpty)) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -103,11 +108,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
     if (page == null || _loadingMore) return;
     setState(() => _loadingMore = true);
     try {
-      final result = await _api.conversations(page: page, search: _search.text);
+      final result = await _api.conversations(page: page);
       if (!mounted) return;
       final pinnedIds = {for (final c in _pinned) c.id};
       setState(() {
-        _recents.addAll(result.items.where((c) => _searching || !pinnedIds.contains(c.id)));
+        _recents.addAll(result.items.where((c) => !pinnedIds.contains(c.id)));
         _nextPage = result.nextPage;
       });
     } on ApiException {
@@ -117,10 +122,12 @@ class _ChatDrawerState extends State<ChatDrawer> {
     }
   }
 
-  void _onSearch(String _) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), _load);
-    setState(() {});
+  /// The search button: closes the menu and opens the Claude-style search sheet over the chat.
+  void _openSearch() {
+    final navigator = Navigator.of(context);
+    final api = _api;
+    navigator.pop();
+    showChatSearch(navigator.context, api: api, onSelect: widget.onSelect);
   }
 
   void _select(ConversationSummary? chat) {
@@ -128,45 +135,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
     widget.onSelect(chat);
   }
 
-  void _soon() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(chatStrings.comingSoon)));
-
-  Future<void> _actions(ConversationSummary chat) async {
-    final c = Palette.of(context);
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                chat.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            ListTile(
-              leading: Icon(chat.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: Text(chat.isPinned ? chatStrings.unpin : chatStrings.pin),
-              onTap: () => Navigator.pop(context, 'pin'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(chatStrings.rename),
-              onTap: () => Navigator.pop(context, 'rename'),
-            ),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: c.danger),
-              title: Text(chatStrings.delete, style: TextStyle(color: c.danger)),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-          ],
-        ),
-      ),
-    );
+  /// [row]: the pressed chat row's context — the menu opens right under it.
+  Future<void> _actions(ConversationSummary chat, BuildContext row) async {
+    final box = row.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final action = await showChatMenu(context, chat: chat, anchor: box.localToGlobal(Offset.zero) & box.size);
     if (!mounted || action == null) return;
     try {
       switch (action) {
@@ -218,31 +191,25 @@ class _ChatDrawerState extends State<ChatDrawer> {
       ) ??
       false;
 
-  Future<void> _account() async {
-    final auth = context.read<AuthState>();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(auth.user?.name ?? ''),
-        content: Text('${auth.user?.email ?? ''}\n\n${chatStrings.logoutConfirm}'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(chatStrings.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(chatStrings.logout)),
-        ],
+  /// The avatar at the bottom: Settings (account, appearance, log out).
+  void _openSettings() {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => SettingsScreen(onOpenScheduled: widget.onOpenScheduled),
       ),
     );
-    if (ok == true && mounted) {
-      Navigator.of(context).pop();
-      await auth.logout();
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = Palette.of(context);
+    final user = context.watch<AuthState>().user;
 
-    // ChatGPT-style: title + search, Library / Scheduled, Pinned, Recents (See all…),
-    // and a "Chat" button with ⚙ at the bottom.
+    // Claude-style: "Garad AI" + round search, Library / Scheduled, Pinned, Recents,
+    // and at the bottom the account avatar (Settings) and a Garad-purple "＋ New chat" pill.
     return Drawer(
       backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(),
@@ -251,82 +218,79 @@ class _ChatDrawerState extends State<ChatDrawer> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 10, 4),
-              child: _searchOpen
-                  ? TextField(
-                      controller: _search,
-                      autofocus: true,
-                      onChanged: _onSearch,
-                      style: const TextStyle(fontSize: 15),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: chatStrings.searchChats,
-                        hintStyle: TextStyle(color: c.faint, fontSize: 15),
-                        prefixIcon: Icon(Icons.search, size: 20, color: c.faint),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 32),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            _search.clear();
-                            setState(() => _searchOpen = false);
-                            _load();
-                          },
-                        ),
-                        border: InputBorder.none,
+              padding: const EdgeInsets.fromLTRB(18, 8, 12, 6),
+              child: Row(
+                children: [
+                  Text(
+                    'Garad AI',
+                    style: TextStyle(color: c.text, fontSize: 22, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  Tooltip(
+                    message: chatStrings.searchChats,
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: CircleBorder(side: BorderSide(color: c.line)),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _openSearch,
+                        child: SizedBox.square(dimension: 40, child: Icon(Icons.search, size: 20, color: c.text)),
                       ),
-                    )
-                  : Row(
-                      children: [
-                        Text(
-                          'Garad AI',
-                          style: TextStyle(color: c.text, fontSize: 20, fontWeight: FontWeight.w700),
-                        ),
-                        const Spacer(),
-                        IconButton.filledTonal(
-                          tooltip: chatStrings.searchChats,
-                          style: IconButton.styleFrom(backgroundColor: c.surfaceStrong, foregroundColor: c.text),
-                          icon: const Icon(Icons.search, size: 20),
-                          onPressed: () => setState(() => _searchOpen = true),
-                        ),
-                      ],
                     ),
-            ),
-            if (!_searching) ...[
-              const SizedBox(height: 4),
-              _NavRow(icon: Icons.view_week_outlined, label: chatStrings.library, onTap: _soon),
-              _NavRow(
-                icon: Icons.schedule,
-                label: chatStrings.scheduled,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  widget.onOpenScheduled();
-                },
+                  ),
+                ],
               ),
-            ],
+            ),
             const SizedBox(height: 6),
+            _NavRow(
+              icon: Icons.view_week_outlined,
+              label: chatStrings.library,
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onOpenLibrary();
+              },
+            ),
+            _NavRow(
+              icon: Icons.auto_awesome_mosaic_outlined,
+              label: chatStrings.artifacts,
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onOpenArtifacts();
+              },
+            ),
+            _NavRow(
+              icon: Icons.schedule,
+              label: chatStrings.scheduled,
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onOpenScheduled();
+              },
+            ),
             Expanded(child: _lists(c)),
-            // Bottom: blue "Chat" (new chat) and ⚙ (account).
+            // Bottom: the account avatar (Settings) and a Garad-purple "＋ New chat" pill.
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
               child: Row(
                 children: [
+                  Tooltip(
+                    message: chatStrings.settings,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _openSettings,
+                      child: AccountAvatar(name: user?.name ?? ''),
+                    ),
+                  ),
+                  const Spacer(),
                   FilledButton.icon(
                     onPressed: () => _select(null),
                     style: FilledButton.styleFrom(
                       backgroundColor: c.brand,
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     ),
-                    icon: const Icon(Icons.edit_square, size: 18),
-                    label: Text(chatStrings.tabChat, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                  ),
-                  const Spacer(),
-                  IconButton.filledTonal(
-                    tooltip: chatStrings.settings,
-                    style: IconButton.styleFrom(backgroundColor: c.surfaceStrong, foregroundColor: c.text),
-                    icon: const Icon(Icons.settings_outlined, size: 21),
-                    onPressed: _account,
+                    icon: const Icon(Icons.add, size: 19),
+                    label: Text(chatStrings.newChat, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
                   ),
                 ],
               ),
@@ -362,83 +326,72 @@ class _ChatDrawerState extends State<ChatDrawer> {
 
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
-        if ((_showAll || _searching) && n.metrics.extentAfter < 200) _loadMore();
+        if (_showAll && n.metrics.extentAfter < 200) _loadMore();
         return false;
       },
       child: ListView(
         padding: const EdgeInsets.only(bottom: 8),
         children: [
-          if (!_searching && _pinned.isNotEmpty) ...[
-            _SectionHeader(
-              label: chatStrings.pinned,
-              open: _pinnedOpen,
-              onTap: () => setState(() => _pinnedOpen = !_pinnedOpen),
-            ),
-            if (_pinnedOpen)
-              for (final chat in _pinned) _chatRow(chat, c, pinned: true),
+          if (_pinned.isNotEmpty) ...[
+            _SectionHeader(label: chatStrings.pinned),
+            for (final chat in _pinned) _chatRow(chat, c),
           ],
-          if (!_searching)
-            _SectionHeader(
-              label: chatStrings.recents,
-              open: _recentsOpen,
-              onTap: () => setState(() => _recentsOpen = !_recentsOpen),
+          _SectionHeader(label: chatStrings.recents),
+          // A short list first, like ChatGPT; "See all…" shows (and keeps loading) the rest.
+          for (final chat in (_showAll ? _recents : _recents.take(_shortList))) _chatRow(chat, c),
+          if (!_showAll && (_recents.length > _shortList || _nextPage != null))
+            InkWell(
+              onTap: () => setState(() => _showAll = true),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+                child: Text(chatStrings.seeAll, style: TextStyle(color: c.muted, fontSize: 14.5)),
+              ),
             ),
-          if (_searching || _recentsOpen) ...[
-            // A short list first, like ChatGPT; "See all…" shows (and keeps loading) the rest.
-            for (final chat in (_searching || _showAll ? _recents : _recents.take(_shortList))) _chatRow(chat, c),
-            if (!_searching && !_showAll && (_recents.length > _shortList || _nextPage != null))
-              InkWell(
-                onTap: () => setState(() => _showAll = true),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-                  child: Text(chatStrings.seeAll, style: TextStyle(color: c.muted, fontSize: 14.5)),
-                ),
-              ),
-            if (_recents.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _searching ? chatStrings.noResults : chatStrings.noChats,
-                  style: TextStyle(color: c.faint, fontSize: 13),
-                ),
-              ),
-            if (_loadingMore)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))),
-              ),
-          ],
+          if (_recents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(chatStrings.noChats, style: TextStyle(color: c.faint, fontSize: 13)),
+            ),
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+            ),
         ],
       ),
     );
   }
 
-  /// One chat: title only (long-press for pin / rename / delete), highlighted when open.
-  Widget _chatRow(ConversationSummary chat, Palette c, {bool pinned = false}) {
+  /// One chat: Claude's round chat icon + title; long-press for Pin / Rename / Delete. Highlighted when open.
+  Widget _chatRow(ConversationSummary chat, Palette c) {
     final selected = chat.id == widget.currentId;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-      child: Material(
-        color: selected ? c.surfaceStrong : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
+      // The Builder's context is this row: its position anchors the menu.
+      child: Builder(
+        builder: (row) => Material(
+          color: selected ? c.surfaceStrong : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          onTap: () => _select(chat),
-          onLongPress: () => _actions(chat),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-            child: Row(
-              children: [
-                if (pinned) ...[Icon(Icons.chat_bubble_outline, size: 17, color: c.text), const SizedBox(width: 12)],
-                Expanded(
-                  child: Text(
-                    chat.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: c.text, fontSize: 15),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _select(chat),
+            onLongPress: () => _actions(chat, row),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 11, 10, 11),
+              child: Row(
+                children: [
+                  ChatBubbleIcon(color: c.text),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      chat.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c.text, fontSize: 15.5),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -473,31 +426,15 @@ class _NavRow extends StatelessWidget {
   }
 }
 
+/// "Pinned" / "Recents": a small grey label, Claude-style.
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.open, required this.onTap});
+  const _SectionHeader({required this.label});
 
   final String label;
-  final bool open;
-  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final c = Palette.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 14, 6),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: c.muted, fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Spacer(),
-            Icon(open ? Icons.expand_more : Icons.chevron_right, size: 16, color: c.faint),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 16, 14, 6),
+    child: Text(label, style: TextStyle(color: Palette.of(context).muted, fontSize: 13.5)),
+  );
 }
