@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:garad_ai/app_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -282,7 +282,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---- Reopen the last chat after a refresh / restart ----
 
-  static const _storage = FlutterSecureStorage();
+  static const _storage = AppStorage();
 
   String? get _lastChatKey {
     final userId = context.read<AuthState>().user?.id;
@@ -512,13 +512,13 @@ class _ChatScreenState extends State<ChatScreen> {
   /// The AI voice picked for calls last time, remembered on this phone.
   Future<String?> _loadVoiceChoice() async {
     try {
-      return await const FlutterSecureStorage().read(key: _voiceKey);
+      return await const AppStorage().read(key: _voiceKey);
     } catch (_) {
       return null;
     }
   }
 
-  void _saveVoiceChoice(String id) => const FlutterSecureStorage().write(key: _voiceKey, value: id).catchError((_) {});
+  void _saveVoiceChoice(String id) => const AppStorage().write(key: _voiceKey, value: id).catchError((_) {});
 
   /// Read aloud for answers. flutter_tts has one channel for the whole app and the newest FlutterTts
   /// receives its events, so this is redone after voice mode (which has its own) closes.

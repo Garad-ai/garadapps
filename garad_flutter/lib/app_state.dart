@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:garad_ai/app_storage.dart';
 
 import 'remote_config.dart';
 
@@ -56,7 +56,7 @@ class AppState extends ChangeNotifier {
 
   // ---- Appearance (Settings → Light / Dark / System), remembered on this device ----
 
-  static const _storage = FlutterSecureStorage();
+  static const _storage = AppStorage();
   static const _themeKey = 'garad_theme_mode';
 
   ThemeMode themeMode = ThemeMode.system;

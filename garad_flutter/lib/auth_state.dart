@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:garad_ai/app_storage.dart';
 
 import 'api/garad_api.dart';
 import 'api/models.dart';
@@ -15,7 +15,7 @@ class AuthState extends ChangeNotifier {
 
   final GaradApi api;
 
-  static const _storage = FlutterSecureStorage();
+  static const _storage = AppStorage();
   static const _tokenKey = 'garad_api_token';
   static const _userKey = 'garad_api_user';
 

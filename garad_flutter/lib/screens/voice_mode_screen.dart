@@ -11,6 +11,7 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../american_voice.dart';
+import '../browser_color.dart';
 import '../call_audio.dart';
 import '../api/models.dart';
 import '../chat_strings.dart';
@@ -105,6 +106,9 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   final _stt = SpeechToText();
   final _tts = FlutterTts();
 
+  /// The app's own background, given back to the browser when the call ends (video turns it black).
+  Color _pageColor = Colors.transparent;
+
   /// Plays the AI voices' audio.
   final _player = AudioPlayer();
   late final StreamSubscription<void> _playerDone;
@@ -192,6 +196,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
 
   @override
   void dispose() {
+    setBrowserColor(_pageColor);
     _clock.dispose();
     _silence?.cancel();
     _stt.cancel();
@@ -1199,6 +1204,8 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     final c = Palette.of(context);
     // Over the camera picture: white text and glass buttons; otherwise the app's light page.
     final onVideo = _cameraOn;
+    _pageColor = c.background;
+    setBrowserColor(onVideo ? Colors.black : c.background);
     final textColor = onVideo ? Colors.white : c.text;
     final mutedColor = onVideo ? Colors.white70 : c.muted;
     final videoShadow = onVideo ? const [Shadow(color: Colors.black54, blurRadius: 6)] : null;

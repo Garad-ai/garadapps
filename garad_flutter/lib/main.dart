@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'api/garad_api.dart';
 import 'app_state.dart';
 import 'auth_state.dart';
+import 'browser_color.dart';
 import 'screens/chat_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme.dart';
@@ -121,6 +122,11 @@ class GaradApp extends StatelessWidget {
       theme: _theme(Palette.light, Brightness.light),
       darkTheme: _theme(Palette.dark, Brightness.dark),
       themeMode: context.select<AppState, ThemeMode>((s) => s.themeMode),
+      // In a browser, the page behind the app (Safari's top edge) takes the app's background colour.
+      builder: (context, child) {
+        setBrowserColor(Theme.of(context).scaffoldBackgroundColor);
+        return child!;
+      },
       home: _AuthGate(openVoice: openVoice),
     );
   }
