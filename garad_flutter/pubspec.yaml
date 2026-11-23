@@ -60,6 +60,8 @@ dependencies:
   gal: ^2.3.3
   file_picker: ^13.3.2
   highlight: ^0.7.0
+  flutter_webrtc: ^1.6.3
+  image: ^4.13.1
 
 dev_dependencies:
   flutter_test:
@@ -87,6 +89,7 @@ flutter:
   assets:
     - assets/images/splash-icon.png
     - assets/images/wordmark.png
+    - assets/images/live_orb.png
     - assets/fonts/SourceSerif4-OFL.txt
 
   # Answers and document previews use a serif like Claude's (Source Serif 4, SIL Open Font License:
@@ -139,10 +142,11 @@ flutter_native_splash:
   image: assets/images/splash-icon.png
   color_dark: "#262624"
   image_dark: assets/images/splash-icon.png
+  # Android 12+ shows the icon inside a circle (the middle 2/3 only): a padded copy so the logo is not cut.
   android_12:
-    image: assets/images/splash-icon.png
+    image: assets/images/splash-android12.png
     color: "#faf9f5"
-    image_dark: assets/images/splash-icon.png
+    image_dark: assets/images/splash-android12.png
     color_dark: "#262624"
   web: false
 

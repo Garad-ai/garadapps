@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -33,8 +34,10 @@ import '../widgets/answer_view.dart';
 import 'artifacts_screen.dart';
 import 'camera_capture_screen.dart';
 import 'library_screen.dart';
+import 'login_screen.dart';
 import 'scheduled_screen.dart';
 import 'voice_mode_screen.dart';
+import 'welcome_screen.dart';
 
 /// The home screen: a new chat with the greeting, or an open chat. The ☰ menu lists all chats.
 class ChatScreen extends StatefulWidget {
@@ -65,9 +68,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sending = false;
   bool _webSearch = false;
 
-  /// The model for voice calls (fast Claude Haiku by default; see [_openVoiceMode]).
-  String? _voiceModelId;
-
   /// Photos added to the next message (up to [_maxPhotos]); each starts uploading when added.
   final List<_Attachment> _attachments = [];
 
@@ -75,6 +75,9 @@ class _ChatScreenState extends State<ChatScreen> {
   ImageEdit? _nextEdit;
   static const _maxPhotos = 4;
   late final void Function() _stopPasteListener;
+
+  /// The model for voice calls (fast Claude Haiku by default; see [_openVoiceMode]).
+  String? _voiceModelId;
 
   /// AI voices for calls, and the one chosen (null = the phone's own voice).
   List<AiVoice> _aiVoices = const [];
@@ -166,6 +169,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final cached = chat == null ? null : _api.cachedConversations[chat.id];
     setState(() {
       _sending = false;
+      _pinLatestTurn = false; // an opened chat shows its end normally, without extra room
       _messages
         ..clear()
         ..addAll(cached?.messages ?? const []);
@@ -272,7 +276,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ..clear()
             ..addAll(result.messages);
         });
-        if (result.messages.length > before) _scrollToEnd();
+        // A new message (e.g. a scheduled task's result): shown only if the user is at the bottom.
+        if (result.messages.length > before && !_moreBelow) _scrollToEnd();
       }
     } on ApiException {
       // Offline for a moment: try again on the next tick.
@@ -376,8 +381,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _input.clear();
       _attachments.clear();
       _messages.addAll([userBubble, replyBubble]);
+      _pinLatestTurn = true;
     });
-    _scrollToEnd();
+    _scrollToEnd(); // the new question moves to the top; its answer is written below it
 
     try {
       if (_conversationId == null) {
@@ -566,7 +572,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ..status = 'error';
       }
     });
-    _scrollToEnd();
+    // No scrolling here: like ChatGPT the screen stays still while the answer is written.
   }
 
   // ---- Answer actions (copy · 👍 · 👎 · read aloud · regenerate · share · ⋯) ----
@@ -1059,13 +1065,50 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// The question asked in this visit (and its answer) gets at least a screen of room, so it can
+  /// stand at the top while the answer is written (ChatGPT). Off for a chat just opened.
+  bool _pinLatestTurn = false;
+
+  /// More of the chat below the screen: shows the ↓ button.
+  bool _moreBelow = false;
+
+  /// The chat scrolled, or grew (an answer being written): is there more below? Only the chat's own
+  /// vertical scrolling counts, not sideways scrolling inside a code block.
+  bool _onListScroll(Notification n) {
+    final ScrollMetrics? metrics = switch (n) {
+      ScrollNotification(:final metrics, :final depth) when depth == 0 => metrics,
+      ScrollMetricsNotification(:final metrics, :final depth) when depth == 0 => metrics,
+      _ => null,
+    };
+    if (metrics == null || metrics.axis != Axis.vertical) return false;
+    // Two thresholds, so the button does not blink on and off while an answer grows near the edge.
+    final after = metrics.extentAfter;
+    final below = _moreBelow ? after > 60 : after > 180;
+    if (below != _moreBelow) {
+      // Not during this frame's layout: on the next one.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && below != _moreBelow) setState(() => _moreBelow = below);
+      });
+    }
+    return false;
+  }
+
+  /// Scrolls to the end of the chat: opening a chat ([jump]), sending a question (which then stands at
+  /// the top, see [_pinLatestTurn]) or the ↓ button. A streaming answer never moves the screen.
   void _scrollToEnd({bool jump = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       final end = _scroll.position.maxScrollExtent;
+      // A smooth glide: longer for a longer way, never sluggish.
+      final distance = (end - _scroll.position.pixels).abs();
+      final ms = (distance / 4).clamp(250, 650).round();
       jump
           ? _scroll.jumpTo(end)
-          : _scroll.animateTo(end, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+          : _scroll.animateTo(
+              end,
+              duration: Duration(milliseconds: ms),
+              curve: Curves.easeOutCubic,
+            );
     });
   }
 
@@ -1105,19 +1148,22 @@ class _ChatScreenState extends State<ChatScreen> {
       onVoice: () {
         if (!_listening) _listen(voice: true);
       },
-      onTalk: _openVoiceMode,
+      onTalk: (user?.guest ?? false) ? () => showLoginSheet(context) : _openVoiceMode,
       onStopListening: () {
         if (_listening) _speech.stop();
       },
       onCancelDictation: _cancelDictation,
       onSendDictation: _sendDictation,
-      onPlus: _plusMenu,
+      // Guests cannot add files: ＋ asks them to log in (ChatGPT style); pasted pictures are ignored.
+      onPlus: (user?.guest ?? false) ? () => showLoginSheet(context) : _plusMenu,
       attachments: _attachments,
       onRemoveAttachment: (i) => setState(() => _attachments.removeAt(i)),
-      onPasteImage: _attach,
-      // Not logged in: one Claude model, chosen by the server — no model pill, no voice calls.
+      onPasteImage: (bytes) {
+        if (!(user?.guest ?? false)) _attach(bytes);
+      },
+      // Not logged in: one Claude model, chosen by the server — no model pill. Talk asks them to log in.
       modelName: (user?.guest ?? false) ? null : model?.shortName,
-      canTalk: !(user?.guest ?? false),
+      canTalk: true,
       webSearch: _webSearch,
       onModel: _modelMenu,
     );
@@ -1156,26 +1202,34 @@ class _ChatScreenState extends State<ChatScreen> {
         scrolledUnderElevation: 0,
         // New chat: Claude-style (round ☰ and 🔔 only). Inside a chat: ☰ · new chat · ⋯
         // (the model is chosen from the pill in the message bar).
-        leadingWidth: 60,
-        leading: Builder(
-          builder: (context) =>
-              roundButton(Icons.notes_rounded, chatStrings.menu, () => Scaffold.of(context).openDrawer()),
-        ),
-        // Chatting without an account: "Log in" at the top, like ChatGPT.
+        // Chatting without an account: "Log in" top left and the menu top right, like ChatGPT.
+        leadingWidth: (user?.guest ?? false) ? 110 : 60,
+        leading: (user?.guest ?? false)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Center(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen())),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: c.text,
+                      foregroundColor: c.background,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(chatStrings.logIn),
+                  ),
+                ),
+              )
+            : Builder(
+                builder: (context) =>
+                    roundButton(Icons.notes_rounded, chatStrings.menu, () => Scaffold.of(context).openDrawer()),
+              ),
         actions: [
           if (user?.guest ?? false)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: FilledButton(
-                onPressed: () => context.read<AuthState>().leaveGuest(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: c.text,
-                  foregroundColor: c.background,
-                  shape: const StadiumBorder(),
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: Text(chatStrings.logIn),
-              ),
+            Builder(
+              builder: (context) =>
+                  roundButton(Icons.more_horiz, chatStrings.menu, () => Scaffold.of(context).openDrawer()),
             ),
         ],
       ),
@@ -1210,34 +1264,105 @@ class _ChatScreenState extends State<ChatScreen> {
                       Expanded(
                         child: _loading
                             ? const Center(child: CircularProgressIndicator())
-                            : ListView.builder(
-                                controller: _scroll,
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                                itemCount: _messages.length,
-                                itemBuilder: (context, i) => _Bubble(
-                                  appVersion: appVersions[i],
-                                  // Changes asked for in an app's preview are sent as the next message.
-                                  onAppChange: _sending ? null : (change) => _send(change),
-                                  message: _messages[i],
-                                  streaming: _sending && i == _messages.length - 1,
-                                  onOpenTask: (task) => _openScheduled(highlightId: task.id),
-                                  onOpenReminder: (id) => _openScheduled(highlightId: id),
-                                  speaking: _speaking == _messages[i],
-                                  onToggleSpeak: () => _toggleSpeak(_messages[i]),
-                                  onFeedback: (value) => _feedback(_messages[i], value),
-                                  onShare: () => _shareMessage(_messages[i]),
-                                  onMore: () => _moreActions(_messages[i]),
-                                  // Only the latest answer can be regenerated (as in ChatGPT).
-                                  onRegenerate: !_sending && i == _messages.length - 1 && _messages[i].id != null
-                                      ? () => _regenerate(_messages[i])
-                                      : null,
-                                  // A question card can be answered while it is the latest message.
-                                  onChoose: !_sending && i == _messages.length - 1 ? (answer) => _send(answer) : null,
-                                  onEditImage: _sending ? null : _editImage,
-                                  chosen: i + 1 < _messages.length && _messages[i + 1].isUser
-                                      ? _messages[i + 1].content
-                                      : null,
-                                ),
+                            : LayoutBuilder(
+                                builder: (context, box) {
+                                  Widget bubble(int i) => _Bubble(
+                                    appVersion: appVersions[i],
+                                    // Changes asked for in an app's preview are sent as the next message.
+                                    onAppChange: _sending ? null : (change) => _send(change),
+                                    message: _messages[i],
+                                    streaming: _sending && i == _messages.length - 1,
+                                    onOpenTask: (task) => _openScheduled(highlightId: task.id),
+                                    onOpenReminder: (id) => _openScheduled(highlightId: id),
+                                    speaking: _speaking == _messages[i],
+                                    onToggleSpeak: () => _toggleSpeak(_messages[i]),
+                                    onFeedback: (value) => _feedback(_messages[i], value),
+                                    onShare: () => _shareMessage(_messages[i]),
+                                    onMore: () => _moreActions(_messages[i]),
+                                    // Only the latest answer can be regenerated (as in ChatGPT).
+                                    onRegenerate: !_sending && i == _messages.length - 1 && _messages[i].id != null
+                                        ? () => _regenerate(_messages[i])
+                                        : null,
+                                    // A question card can be answered while it is the latest message.
+                                    onChoose: !_sending && i == _messages.length - 1 ? (answer) => _send(answer) : null,
+                                    onEditImage: _sending ? null : _editImage,
+                                    chosen: i + 1 < _messages.length && _messages[i + 1].isUser
+                                        ? _messages[i + 1].content
+                                        : null,
+                                  );
+                                  // Like ChatGPT: the question just asked and its answer fill at least one
+                                  // screen, so the question can stand at the top while the answer is written
+                                  // below it — the screen does not move until the user scrolls.
+                                  final n = _messages.length;
+                                  final pinned =
+                                      _pinLatestTurn && n >= 2 && !_messages[n - 1].isUser && _messages[n - 2].isUser;
+                                  final count = pinned ? n - 1 : n;
+                                  return NotificationListener<Notification>(
+                                    onNotification: _onListScroll,
+                                    child: Stack(
+                                      children: [
+                                        ListView.builder(
+                                          controller: _scroll,
+                                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                          itemCount: count,
+                                          itemBuilder: (context, i) => pinned && i == count - 1
+                                              ? ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    minHeight: math.max(0, box.maxHeight - 24),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [bubble(i), bubble(i + 1)],
+                                                  ),
+                                                )
+                                              : bubble(i),
+                                        ),
+                                        // ↓ : more of the chat below (ChatGPT's round arrow). It fades and
+                                        // slides in and out instead of popping.
+                                        Positioned(
+                                          left: 0,
+                                          right: 0,
+                                          bottom: 10,
+                                          child: IgnorePointer(
+                                            ignoring: !_moreBelow,
+                                            child: AnimatedSlide(
+                                              offset: _moreBelow ? Offset.zero : const Offset(0, 0.4),
+                                              duration: const Duration(milliseconds: 220),
+                                              curve: Curves.easeOutCubic,
+                                              child: AnimatedOpacity(
+                                                opacity: _moreBelow ? 1 : 0,
+                                                duration: const Duration(milliseconds: 220),
+                                                curve: Curves.easeOut,
+                                                child: Center(
+                                                  child: Material(
+                                                    color: Theme.of(context).colorScheme.surface,
+                                                    elevation: 3,
+                                                    shape: CircleBorder(
+                                                      side: BorderSide(color: Palette.of(context).line),
+                                                    ),
+                                                    child: InkWell(
+                                                      customBorder: const CircleBorder(),
+                                                      onTap: () => _scrollToEnd(),
+                                                      child: SizedBox.square(
+                                                        dimension: 40,
+                                                        child: Icon(
+                                                          Icons.arrow_downward_rounded,
+                                                          size: 20,
+                                                          color: Palette.of(context).text,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                       ),
                       Padding(
@@ -1405,7 +1530,9 @@ class _Composer extends StatelessWidget {
   final VoidCallback onDictate;
   final VoidCallback onVoice;
   final VoidCallback onStopListening;
-  final VoidCallback onPlus;
+
+  /// ＋ (camera, photos, files…); null for guests, who cannot add files.
+  final VoidCallback? onPlus;
 
   @override
   Widget build(BuildContext context) {
@@ -1532,14 +1659,16 @@ class _Composer extends StatelessWidget {
           else
             Row(
               children: [
-                // ＋ : add to chat (camera, photos, files, web search, scheduled)
-                _Circle(
-                  color: c.surfaceStrong,
-                  tooltip: chatStrings.more,
-                  onTap: onPlus,
-                  child: Icon(Icons.add, size: 20, color: c.text),
-                ),
-                const SizedBox(width: 6),
+                // ＋ : add to chat (camera, photos, files, web search, scheduled). Not for guests.
+                if (onPlus case final plus?) ...[
+                  _Circle(
+                    color: c.surfaceStrong,
+                    tooltip: chatStrings.more,
+                    onTap: plus,
+                    child: Icon(Icons.add, size: 20, color: c.text),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 // The model pill, e.g. "Claude Sonnet 5".
                 if (modelName != null)
                   Flexible(

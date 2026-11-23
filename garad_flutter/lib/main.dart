@@ -15,7 +15,7 @@ import 'app_state.dart';
 import 'auth_state.dart';
 import 'browser_color.dart';
 import 'screens/chat_screen.dart';
-import 'screens/login_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'theme.dart';
 
 Future<void> main() async {
@@ -95,7 +95,7 @@ class _AuthGate extends StatelessWidget {
     // Keyed by user so signing out and in again starts fresh.
     return auth.signedIn
         ? ChatScreen(key: ValueKey(auth.user!.id), startVoice: openVoice)
-        : const LoginScreen();
+        : const WelcomeScreen();
   }
 }
 

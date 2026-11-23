@@ -58,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       await context.read<AuthState>().continueAsGuest();
+      _closeIfPushed();
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -87,6 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         await auth.login(_email.text, _password.text, remember: _remember);
       }
+      _closeIfPushed();
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -94,11 +96,94 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Opened from the welcome screen or the guest chat: back to the (now signed-in) chat.
+  void _closeIfPushed() {
+    if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+  }
+
   void _switchMode() => setState(() {
     _signUp = !_signUp;
     _error = null;
     _form.currentState?.reset();
   });
+
+  /// "Forgot password?": asks for the email (the one typed above, if any) and sends a reset link.
+  Future<void> _forgotPassword() async {
+    FocusScope.of(context).unfocus();
+    final somali = chatStrings.isSomali;
+    String t(String so, String en) => somali ? so : en;
+    final email = TextEditingController(text: _email.text.trim());
+    final api = context.read<AuthState>().api;
+    final messenger = ScaffoldMessenger.of(context);
+    final sent = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        var sending = false;
+        String? error;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialog) {
+            Future<void> send() async {
+              final value = email.text.trim();
+              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
+                setDialog(() => error = authStrings.invalidEmail);
+                return;
+              }
+              setDialog(() {
+                sending = true;
+                error = null;
+              });
+              try {
+                final message = await api.forgotPassword(value);
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(message);
+              } on ApiException catch (e) {
+                setDialog(() {
+                  sending = false;
+                  error = e.message;
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(t('Dib u dhig furaha', 'Reset your password')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t(
+                    'Geli email-kaaga. Waxaan kuu soo diraynaa link aad ku beddesho furaha.',
+                    'Enter your email. We will send you a link to choose a new password.',
+                  )),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    autocorrect: false,
+                    autofocus: email.text.isEmpty,
+                    onSubmitted: (_) => sending ? null : send(),
+                    decoration: InputDecoration(hintText: authStrings.emailHint, errorText: error),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: sending ? null : () => Navigator.of(dialogContext).pop(),
+                  child: Text(t('Jooji', 'Cancel')),
+                ),
+                FilledButton(
+                  onPressed: sending ? null : send,
+                  child: sending
+                      ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(t('Dir link-ga', 'Send link')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (sent != null && sent.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(sent)));
+  }
 
   void _soon() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authStrings.comingSoon)));
 
@@ -115,6 +200,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: dark ? c.background : const Color(0xFFEDEDF0),
+      // Opened from the welcome screen or the guest chat: a way back.
+      appBar: Navigator.of(context).canPop()
+          ? AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, foregroundColor: c.text)
+          : null,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -268,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Text(s.rememberMe, style: TextStyle(fontSize: 12, color: c.muted)),
                               const Spacer(),
                               TextButton(
-                                onPressed: _soon,
+                                onPressed: _busy ? null : _forgotPassword,
                                 style: TextButton.styleFrom(foregroundColor: c.brand, padding: EdgeInsets.zero),
                                 child: Text(s.forgotPassword, style: const TextStyle(fontSize: 12)),
                               ),

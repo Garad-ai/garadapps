@@ -221,9 +221,12 @@ class _ChatDrawerState extends State<ChatDrawer> {
               padding: const EdgeInsets.fromLTRB(18, 8, 12, 6),
               child: Row(
                 children: [
-                  Text(
-                    'Garad AI',
-                    style: TextStyle(color: c.text, fontSize: 22, fontWeight: FontWeight.w600),
+                  // The Garad logo with its name, instead of plain text.
+                  Image.asset(
+                    'assets/images/wordmark.png',
+                    height: 30,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Garad AI',
                   ),
                   const Spacer(),
                   Tooltip(
@@ -242,30 +245,33 @@ class _ChatDrawerState extends State<ChatDrawer> {
               ),
             ),
             const SizedBox(height: 6),
-            _NavRow(
-              icon: Icons.view_week_outlined,
-              label: chatStrings.library,
-              onTap: () {
-                Navigator.of(context).pop();
-                widget.onOpenLibrary();
-              },
-            ),
-            _NavRow(
-              icon: Icons.auto_awesome_mosaic_outlined,
-              label: chatStrings.artifacts,
-              onTap: () {
-                Navigator.of(context).pop();
-                widget.onOpenArtifacts();
-              },
-            ),
-            _NavRow(
-              icon: Icons.schedule,
-              label: chatStrings.scheduled,
-              onTap: () {
-                Navigator.of(context).pop();
-                widget.onOpenScheduled();
-              },
-            ),
+            // Library, Artifacts and Scheduled need an account: guests only chat.
+            if (!(user?.guest ?? false)) ...[
+              _NavRow(
+                icon: Icons.view_week_outlined,
+                label: chatStrings.library,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onOpenLibrary();
+                },
+              ),
+              _NavRow(
+                icon: Icons.auto_awesome_mosaic_outlined,
+                label: chatStrings.artifacts,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onOpenArtifacts();
+                },
+              ),
+              _NavRow(
+                icon: Icons.schedule,
+                label: chatStrings.scheduled,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onOpenScheduled();
+                },
+              ),
+            ],
             Expanded(child: _lists(c)),
             // Bottom: the account avatar (Settings) and a Garad-purple "＋ New chat" pill.
             Padding(

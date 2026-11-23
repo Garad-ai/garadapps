@@ -697,10 +697,12 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
           audio = synthesize(voice, text);
           continue;
         }
-        // No voice for this sentence: show it as a caption, give the reader time, then carry on.
+        // The AI voices are not working (e.g. the voice service is out of credits): the phone's own
+        // voice says this sentence and the rest of the call, instead of Garad going silent.
+        _voiceId = null;
+        _audio.clear();
         setState(() => _saying = text);
-        await Future<void>.delayed(Duration(milliseconds: 600 + 50 * text.length));
-        if (mounted && turn == _turn && _speakingChunk) _onSpokenDone();
+        _tts.speak(text);
         return;
       }
     }

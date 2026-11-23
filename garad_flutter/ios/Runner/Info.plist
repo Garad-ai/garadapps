@@ -45,7 +45,7 @@
 		<true/>
 		<!-- Chat Pro: photos, voice chat and dictation inside the web page. Same text as the Expo app. -->
 		<key>NSCameraUsageDescription</key>
-		<string>Garad AI uses the camera so you can take a photo to send in a chat.</string>
+		<string>Garad AI uses the camera so you can send a photo in a chat, and so Garad can see what you show it in Garad Live.</string>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Garad AI uses the microphone for voice chat and dictation.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

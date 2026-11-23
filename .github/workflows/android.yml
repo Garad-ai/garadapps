@@ -2,11 +2,9 @@ name: Android
 
 # Builds an installable APK (for direct download/testing) and an AAB (for Google Play).
 # Pushing a tag such as v1.0.0 also publishes both files on a GitHub Release.
+# The old Expo app (repo root). Manual only: the Garad AI app is now the Flutter app in garad_flutter/
+# (see flutter.yml), and running this on every push only reported a failing check.
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 permissions:

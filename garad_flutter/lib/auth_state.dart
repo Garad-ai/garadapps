@@ -37,15 +37,7 @@ class AuthState extends ChangeNotifier {
       // Unreadable storage (e.g. after an OS restore): start signed out.
       await _clear();
     }
-    // First launch (never signed in or out): straight into the chat as a guest, like ChatGPT.
-    // Offline or refused: the login screen, which also offers "Continue without an account".
-    if (user == null && await _storage.read(key: _signedOutKey) == null) {
-      try {
-        await continueAsGuest();
-      } on ApiException {
-        // Show the login screen.
-      }
-    }
+    // Not signed in: the welcome screen (Google, Apple, email or Skip), like ChatGPT.
     ready = true;
     notifyListeners();
 

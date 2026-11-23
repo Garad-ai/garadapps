@@ -72,6 +72,13 @@ class GaradApi {
     return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
 
+  /// Emails a link to reset the password (the reset itself happens on the website).
+  /// Returns the server's message, which is the same whether or not the email has an account.
+  Future<String> forgotPassword(String email) async {
+    final data = await _send('POST', '/auth/forgot-password', body: {'email': email}) as Map<String, dynamic>;
+    return data['message'] as String? ?? '';
+  }
+
   /// Chat without an account: this phone's guest login (the server limits messages per day).
   Future<({String token, GaradUser user})> guest(String deviceId) async {
     final data =
@@ -219,6 +226,16 @@ class GaradApi {
   Future<List<AiVoice>> voices() async {
     final data = await _send('GET', '/voices') as Map<String, dynamic>;
     return [for (final v in data['data'] as List) AiVoice.fromJson(v as Map<String, dynamic>)];
+  }
+
+  /// A short-lived key for a Garad Live call (OpenAI's realtime model). The server keeps the real
+  /// OpenAI key; this one only works to start one call within a few minutes.
+  Future<LiveKey> liveSession({String? voice, required bool somali}) async {
+    final data = await _send('POST', '/live/session', body: {
+      'voice': ?voice,
+      'language': somali ? 'so' : 'en',
+    }) as Map<String, dynamic>;
+    return LiveKey(key: data['key'] as String, model: data['model'] as String);
   }
 
   /// [text] spoken by the AI voice [voiceId], as MP3 (made by the server; the voice key stays there).

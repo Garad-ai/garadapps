@@ -161,6 +161,14 @@ class AiVoice {
   final String description;
 }
 
+/// The short-lived key for one Garad Live call, and the realtime model it is for.
+class LiveKey {
+  const LiveKey({required this.key, required this.model});
+
+  final String key;
+  final String model;
+}
+
 /// An app or website the AI built in a chat (Artifacts): its latest version.
 /// A picture from the web for one idea in an answer (GET /images).
 class WebPhoto {

@@ -2,6 +2,12 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission
         android:name="android.permission.INTERNET"/>
+    <!-- Garad Live: the live voice connection (WebRTC) checks the network. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Android 12+: needed to send Garad Live's voice to Bluetooth earbuds. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"/>
     <!-- Chat Pro: photos, voice chat and dictation inside the web page. -->
     <uses-permission
         android:name="android.permission.CAMERA"/>
@@ -27,7 +33,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="portrait"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
