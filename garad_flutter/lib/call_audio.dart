@@ -17,6 +17,20 @@ abstract final class CallAudio {
   /// Before Garad speaks, when muted or when the call ends: the sound is back to normal.
   static Future<void> restore() => _call('restore');
 
+  /// Whether the sound goes to earphones or a headset (wired or Bluetooth): then the microphone
+  /// does not hear Garad, and the call can listen while Garad talks. False elsewhere or if unknown.
+  static Future<bool> earphones() async {
+    if (!_android) return false;
+    try {
+      return await channel
+              .invokeMethod<bool>('earphones')
+              .timeout(const Duration(milliseconds: 800), onTimeout: () => false) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> _call(String method) async {
     if (!_android) return;
     try {

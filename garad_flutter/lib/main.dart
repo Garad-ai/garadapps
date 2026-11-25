@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
-import 'package:device_preview/device_preview.dart';
-import 'package:device_preview/presets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,9 +17,7 @@ import 'screens/welcome_screen.dart';
 import 'theme.dart';
 
 Future<void> main() async {
-  // Drop-in replacement for WidgetsFlutterBinding.ensureInitialized(): lets the running app
-  // simulate other devices (size, notch, text scale, …) from DevTools. Off in release builds.
-  final binding = DevicePreview.enable();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
 
   // The bundled Source Serif 4 font's license, on the app's licenses page.
   LicenseRegistry.addLicense(() async* {
@@ -30,19 +26,6 @@ Future<void> main() async {
     ], await rootBundle.loadString('assets/fonts/SourceSerif4-OFL.txt'));
   });
 
-  // In Chrome or on a desktop, start inside a phone frame so the layout looks like the real
-  // app. On a real phone, no preset: the device's own screen is the one to test.
-  final preview = DevicePreview.maybeController;
-  final onBigScreen =
-      kIsWeb ||
-      const {
-        TargetPlatform.windows,
-        TargetPlatform.macOS,
-        TargetPlatform.linux,
-      }.contains(defaultTargetPlatform);
-  if (preview != null && onBigScreen) {
-    unawaited(preview.applyPreset(DevicePresets.iPhone17Pro));
-  }
   // The splash screen stays up until the saved login has been read (see _AuthGate).
   FlutterNativeSplash.preserve(widgetsBinding: binding);
 

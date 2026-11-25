@@ -460,3 +460,53 @@ class ReplyFailed extends ChatEvent {
   final String message;
   final ChatMessage? saved;
 }
+
+/// The picture beside the website's sign-in, set in the website admin, for the app's first screen: a
+/// looping [video], or [slides] that take turns, or one [fallback] picture — with an optional [bottom]
+/// logo and [review] line under it ("GARAD AI Powered BY" and Arkaan's logo).
+class WelcomeVisual {
+  const WelcomeVisual({this.video, this.slides = const [], this.fallback, this.bottom, this.review = ''});
+
+  factory WelcomeVisual.fromJson(Map<String, dynamic> json) => WelcomeVisual(
+    video: json['video'] as String?,
+    slides: [
+      for (final s in (json['slides'] as List? ?? const []))
+        if (s is String && s.isNotEmpty) s,
+    ],
+    fallback: json['fallback'] as String?,
+    bottom: json['bottom'] as String?,
+    review: (json['review'] as String? ?? '').trim(),
+  );
+
+  final String? video;
+  final List<String> slides;
+  final String? fallback;
+  final String? bottom;
+  final String review;
+
+  /// The pictures shown without a video (and while it loads): the slides, or the one fallback.
+  List<String> get pictures => slides.isNotEmpty ? slides : [?fallback];
+
+  bool get isEmpty => video == null && pictures.isEmpty;
+}
+
+/// What a turn of a voice/camera call streams back (see GaradApi.callTurn).
+sealed class CallEvent {
+  const CallEvent();
+}
+
+/// The next words of Garad's answer.
+class CallWords extends CallEvent {
+  const CallWords(this.text);
+  final String text;
+}
+
+/// Garad points at something on the live camera, Gemini-style ("press this red button"): the spot
+/// is [x], [y] in 0..1 of the camera picture as Garad saw it — upright and the right way round
+/// (not a selfie mirror image) — with a short [label] ("Power button").
+class CallPoint extends CallEvent {
+  const CallPoint(this.x, this.y, this.label);
+  final double x;
+  final double y;
+  final String label;
+}

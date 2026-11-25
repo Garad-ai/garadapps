@@ -31,6 +31,28 @@ class VoiceReply {
 
 enum _Phase { starting, listening, thinking, speaking, paused, unavailable }
 
+/// What goes with a question in a call: a photo the user shared, and what the camera shows now.
+typedef CallPictures = ({Uint8List? photo, Uint8List? camera});
+
+/// Where a spot of the camera picture is on the screen. [x], [y] are 0..1 of the upright [picture];
+/// the picture fills [screen] like BoxFit.cover (its overflow cut off at two sides) and is shown
+/// [mirrored] (the selfie camera) or not. Kept a little inside the screen, so a spot in the part
+/// cut off still shows at the nearest edge.
+@visibleForTesting
+Offset pictureToScreen(double x, double y, Size picture, Size screen, {required bool mirrored, double margin = 24}) {
+  final scale = math.max(screen.width / picture.width, screen.height / picture.height);
+  final width = picture.width * scale;
+  final height = picture.height * scale;
+  final left = (screen.width - width) / 2;
+  final top = (screen.height - height) / 2;
+  final dx = left + (mirrored ? 1 - x : x) * width;
+  final dy = top + y * height;
+  return Offset(
+    dx.clamp(margin, math.max(margin, screen.width - margin)),
+    dy.clamp(margin, math.max(margin, screen.height - margin)),
+  );
+}
+
 /// Words that are never a whole question on their own: fillers and joining words the microphone
 /// catches from noise or a half-started sentence ("and", "um"…).
 const _strayWords = {
@@ -56,7 +78,9 @@ class VoiceModeScreen extends StatefulWidget {
     super.key,
     required this.ask,
     required this.cancel,
-    this.upload,
+    this.seesImages = false,
+    this.greetCamera,
+    this.points,
     this.userName = '',
     this.models = const [],
     this.modelId,
@@ -76,13 +100,21 @@ class VoiceModeScreen extends StatefulWidget {
   /// Speech for a sentence in an AI voice (MP3). Null: only the phone's voice.
   final Future<Uint8List> Function(String voiceId, String text)? synthesize;
 
-  /// Sends what the user said (and any image references) through the chat — so it is saved —
-  /// and returns Garad's answer.
-  /// [onText] receives the answer so far while it streams, so speaking can start before it ends.
-  final Future<VoiceReply> Function(String text, List<String> images, ValueChanged<String> onText) ask;
+  /// Sends what the user said, with the pictures that go with it (a shared photo, what the camera
+  /// sees now — JPEG/PNG bytes, sent inline), and returns Garad's answer. The turn is saved to the
+  /// chat. [onText] receives the answer so far while it streams, so speaking can start before it ends.
+  final Future<VoiceReply> Function(String text, CallPictures pictures, ValueChanged<String> onText) ask;
 
-  /// Stores an image for a question; returns its reference. Null hides the camera and photo buttons.
-  final Future<String> Function(Uint8List bytes)? upload;
+  /// Where Garad points on the live camera while it answers ("press this red button"): circled on
+  /// the video until the next question.
+  final Stream<CallPoint>? points;
+
+  /// Garad can see pictures in this call: shows the camera and photo buttons.
+  final bool seesImages;
+
+  /// The camera was just turned on: Garad looks at [frame] and speaks first ("Hey, I can see
+  /// you…"), the answer streaming to [onText] like [ask]'s. Null: Garad waits for the user.
+  final Future<VoiceReply> Function(Uint8List frame, ValueChanged<String> onText)? greetCamera;
 
   /// Stops waiting for an answer (when the user interrupts while Garad is thinking).
   final VoidCallback cancel;
@@ -164,9 +196,37 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   int _cameraIndex = 0;
   bool get _cameraOn => _camera?.value.isInitialized ?? false;
 
-  /// A photo shared with ⬆, sent with the next question (uploading in the background).
+  /// A photo shared with ⬆, sent with the next question.
   Uint8List? _photo;
-  Future<String>? _photoRef;
+
+  /// Whether [CameraPreview] already shows the open camera mirrored (see [_previewIsMirrored]).
+  bool _pluginMirrors = false;
+
+  /// The selfie camera is shown like a mirror — as in Gemini Live and every video call: your right
+  /// hand is on the right. The back camera shows the world as it is. (Garad itself always gets the
+  /// true picture, so writing it reads is the right way round.)
+  bool get _showMirrored => _camera?.description.lensDirection == CameraLensDirection.front;
+
+  /// Spots Garad is pointing at on the live camera (newest last), circled until the next question.
+  final List<CallPoint> _shownPoints = [];
+  StreamSubscription<CallPoint>? _pointsSub;
+  Timer? _pointsTimeout;
+
+  void _showPoint(CallPoint point) {
+    if (!mounted || !_cameraOn) return;
+    setState(() {
+      _shownPoints.add(point);
+      if (_shownPoints.length > 3) _shownPoints.removeAt(0);
+    });
+    // The circles stay while Garad explains, and go with the next question — or after a while.
+    _pointsTimeout?.cancel();
+    _pointsTimeout = Timer(const Duration(seconds: 30), _clearPoints);
+  }
+
+  void _clearPoints() {
+    _pointsTimeout?.cancel();
+    if (mounted && _shownPoints.isNotEmpty) setState(_shownPoints.clear);
+  }
 
   @override
   void initState() {
@@ -177,8 +237,9 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     // iPhone: speak through the loudspeaker while the microphone is open, with the phone's echo
     // cancellation (voice-chat mode), so Garad stays audible and does not hear itself as the user.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) _setUpIosAudio();
-    // An AI voice whenever there are any (an American one unless another was picked) — the phone's
-    // own voice only when the server has none.
+    // An AI voice whenever the app passes any (an American one unless another was picked) — the
+    // phone's own voice otherwise. (The app passes none now: calls are on Claude only, with the
+    // phone's voice.)
     _voiceId =
         widget.voiceId ??
         (widget.voices.where((v) => v.description.contains('American')).firstOrNull ?? widget.voices.firstOrNull)?.id;
@@ -189,6 +250,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     // Each word Garad speaks gives the glow a pulse.
     _tts.setProgressHandler((text, start, end, word) => _bump(0.55 + _random.nextDouble() * 0.45));
     _modelId = widget.modelId;
+    _pointsSub = widget.points?.listen(_showPoint);
     _applySpeed();
     useAmericanVoice(_tts);
     _start();
@@ -205,6 +267,8 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     _player.dispose();
     _camera?.dispose();
     _focusRing?.cancel();
+    _pointsSub?.cancel();
+    _pointsTimeout?.cancel();
     CallAudio.restore();
     super.dispose();
   }
@@ -334,6 +398,8 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
           _finish();
           return;
         }
+        // Back to listening quickly — words said while the microphone is closed are lost. (_listen
+        // releases the recognizer's old session first, so the restart is not refused.)
         final turn = _turn;
         Future.delayed(const Duration(milliseconds: 600), () {
           if (mounted && _phase == _Phase.listening && turn == _turn && !_stt.isListening) _listen();
@@ -341,6 +407,8 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
       }
     }
 
+    // Never waited on: listening must not depend on the answer (Garad only speaks later anyway).
+    unawaited(_checkEarphones());
     final ok = await _stt.initialize(onStatus: onStatus, onError: onError);
     // SpeechToText is one shared object and initialize() only sets these the first time (a second call,
     // or after dictating in the chat, would keep the old ones and never hear "done" or errors here).
@@ -392,6 +460,15 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     }
     if (!mounted || _phase != _Phase.listening) return;
 
+    // Android: after an error (e.g. no speech heard) the recognizer can keep its session open while
+    // the plugin already reports "not listening" (cancelOnError is false). A new listen() is then
+    // refused with "capacity is full", over and over, and the call stays on "Listening…" without
+    // ever hearing the user. Release any such session first.
+    if (!kIsWeb) {
+      await _stt.cancel();
+      if (!mounted || _phase != _Phase.listening) return;
+    }
+
     final turn = _turn;
     try {
       await _listenNow(_localeId);
@@ -404,11 +481,13 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     }
   }
 
-  Future<void> _listenNow(String? localeId) async {
+  /// [whileSpeaking]: listening for the user to cut in while Garad talks. The phone's sound is then
+  /// left on — quieting the recognizer's beeps would also silence Garad's voice (same channel).
+  Future<void> _listenNow(String? localeId, {bool whileSpeaking = false}) async {
     _transcript = '';
     _dropWords = 0;
     // Android: no start/stop beep each time the recognizer opens (sent first, so it lands first).
-    CallAudio.quiet();
+    if (!whileSpeaking) CallAudio.quiet();
     await _stt.listen(
       onResult: (result) {
         if (!mounted) return;
@@ -473,17 +552,34 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
       .where((w) => w.isNotEmpty)
       .toList();
 
-  /// Cutting in by talking needs the phone to cancel Garad's own voice from the microphone (echo
-  /// cancellation). Only an iPhone speaking with its own voice in voice-chat mode does that reliably;
-  /// browsers, most Android phones and the AI voices' player do not, and then the microphone "hears"
-  /// Garad and sends made-up words as the user's question. There, tap the pill to interrupt instead.
-  bool get _canBargeIn => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS && _voiceId == null;
+  /// Cutting in by talking, as in Gemini Live: the microphone stays open while Garad speaks with the
+  /// phone's voice. iPhones cancel Garad's own voice from the microphone (voice-chat mode). Android's
+  /// speech recognizer does not: on the loudspeaker it hears Garad and turns it into made-up words
+  /// that would be sent as the user's question — so on Android it listens over Garad only when the
+  /// sound goes to earphones or a headset ([_earphones]). Otherwise (loudspeaker, browsers) a tap
+  /// on the glowing pill interrupts.
+  bool get _canBargeIn =>
+      !kIsWeb &&
+      ((defaultTargetPlatform == TargetPlatform.iOS && _voiceId == null) ||
+          // With earphones the microphone can't hear Garad at all — the phone's voice or an AI voice.
+          (defaultTargetPlatform == TargetPlatform.android && _earphones));
+
+  /// Android: the sound goes to earphones or a headset (checked when the call starts and each turn).
+  bool _earphones = false;
+
+  Future<void> _checkEarphones() async {
+    final on = await CallAudio.earphones();
+    if (mounted && on != _earphones) setState(() => _earphones = on);
+  }
 
   /// Starts listening while Garad talks.
   Future<void> _startBargeIn() async {
     if (!mounted || !_canBargeIn || _phase != _Phase.speaking || _stt.isListening) return;
     try {
-      await _listenNow(_localeId);
+      // Android: release a session the recognizer still holds, or the new one is refused.
+      if (defaultTargetPlatform == TargetPlatform.android) await _stt.cancel();
+      if (!mounted || _phase != _Phase.speaking || _stt.isListening) return;
+      await _listenNow(_localeId, whileSpeaking: true);
     } catch (_) {
       // Not this time: the next sentence tries again.
     }
@@ -536,7 +632,10 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   Future<void> _ask(String text) async {
     await _stt.stop();
     if (!mounted) return;
+    // Earphones plugged in or out since the last turn: decides how Garad can be interrupted.
+    unawaited(_checkEarphones());
     final turn = ++_turn;
+    _clearPoints(); // a new question: the last answer's circles go
     setState(() {
       _phase = _Phase.thinking;
       _question = text;
@@ -545,35 +644,49 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     });
 
     // What Garad should see with this question: the shared photo, and the camera's view right now.
-    final images = <String>[];
-    final photo = _photoRef;
-    if (photo != null) {
-      try {
-        images.add(await photo);
-      } catch (_) {
-        // Upload failed: ask without it.
-      }
-      if (mounted) {
-        setState(() {
-          _photo = null;
-          _photoRef = null;
-        });
-      }
-    }
-    if (_cameraOn) {
-      // Taken now that the user has finished asking: by then they are holding up what they mean
-      // ("calculate this"), steady — not while they were still moving it into view.
-      final frame = await _captureFrame();
-      if (frame != null) images.add(frame);
-    }
+    final photo = _photo;
+    if (photo != null) setState(() => _photo = null);
+    // Taken now that the user has finished asking: by then they are holding up what they mean
+    // ("calculate this"), steady — not while they were still moving it into view.
+    final frame = _cameraOn ? await _captureFrame() : null;
     if (!mounted || turn != _turn) return; // interrupted meanwhile
 
+    await _respond(turn, (onText) => widget.ask(text, (photo: photo, camera: frame), onText));
+  }
+
+  /// The camera was just turned on: like someone picking up a video call, Garad looks and speaks
+  /// first ("Hey, I can see you…") — unless the user is already saying something or Garad is busy.
+  Future<void> _greetOnCamera() async {
+    final greet = widget.greetCamera;
+    if (greet == null) return;
+    bool free() => mounted && _cameraOn && _phase == _Phase.listening && _heard.trim().isEmpty;
+    // A moment for the camera to set its exposure: the very first pictures are often dark.
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!free()) return;
+    final frame = await _captureFrame();
+    if (frame == null || !free()) return;
+    await _stt.stop();
+    if (!mounted) return;
+    final turn = ++_turn;
+    _clearPoints();
+    setState(() {
+      _phase = _Phase.thinking;
+      _question = '';
+      _saying = '';
+      _reply = '';
+    });
+    await _respond(turn, (onText) => greet(frame, onText));
+  }
+
+  /// Garad answers: [request] fetches the answer (streaming it to its callback), which is spoken
+  /// sentence by sentence while it is still arriving; then the call listens again.
+  Future<void> _respond(int turn, Future<VoiceReply> Function(ValueChanged<String> onText) request) async {
     // Speak the answer sentence by sentence while it is still arriving (no waiting for the end).
     _speechQueue.clear();
     _spokenUpTo = 0;
     _queuedText = '';
     _replyDone = false;
-    final reply = await widget.ask(text, images, (soFar) {
+    final reply = await request((soFar) {
       if (!mounted || turn != _turn) return;
       setState(() => _reply = soFar);
       _queueSentences(soFar, finished: false);
@@ -625,8 +738,17 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     if (!finished) {
       // Up to the last sentence end (. ! ? … or a new line) followed by a space or line break.
       final ends = RegExp(r'[.!?…\n](?=\s)').allMatches(pending);
-      if (ends.isEmpty) return;
-      end = ends.last.end;
+      if (ends.isNotEmpty) {
+        end = ends.last.end;
+      } else if (_spokenUpTo == 0 && pending.length >= 40) {
+        // The first words of an answer: start speaking at a natural pause (comma, colon, dash)
+        // instead of waiting for the whole first sentence — Garad is silent for less time.
+        final pauses = RegExp(r'[,;:—–](?=\s)').allMatches(pending);
+        if (pauses.isEmpty) return;
+        end = pauses.last.end;
+      } else {
+        return;
+      }
     }
     final chunk = _speakable(pending.substring(0, end));
     _spokenUpTo += end;
@@ -679,32 +801,21 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   /// sentence stays on screen as a caption and the call goes on.
   Future<void> _playAudio(Future<Uint8List> audio, String text) async {
     final turn = _turn;
-    final voice = _voiceId;
-    final synthesize = widget.synthesize;
-    for (var attempt = 0; ; attempt++) {
-      try {
-        final bytes = await audio;
-        if (!mounted || turn != _turn || !_speakingChunk) return; // interrupted meanwhile
-        setState(() => _saying = text); // the caption appears as the voice starts
-        await _player.play(BytesSource(bytes, mimeType: 'audio/mpeg'));
-        // ⋯ Slow / Normal / Fast for the AI voices too (players keep the pitch, only the pace changes).
-        if (_speed != 1) await _player.setPlaybackRate(_speed);
-        return;
-      } catch (_) {
-        if (!mounted || turn != _turn || !_speakingChunk) return;
-        if (attempt < 2 && voice != null && synthesize != null) {
-          await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
-          audio = synthesize(voice, text);
-          continue;
-        }
-        // The AI voices are not working (e.g. the voice service is out of credits): the phone's own
-        // voice says this sentence and the rest of the call, instead of Garad going silent.
-        _voiceId = null;
-        _audio.clear();
-        setState(() => _saying = text);
-        _tts.speak(text);
-        return;
-      }
+    try {
+      final bytes = await audio;
+      if (!mounted || turn != _turn || !_speakingChunk) return; // interrupted meanwhile
+      setState(() => _saying = text); // the caption appears as the voice starts
+      await _player.play(BytesSource(bytes, mimeType: 'audio/mpeg'));
+      // ⋯ Slow / Normal / Fast for the AI voices too (players keep the pitch, only the pace changes).
+      if (_speed != 1) await _player.setPlaybackRate(_speed);
+    } catch (_) {
+      if (!mounted || turn != _turn || !_speakingChunk) return;
+      // The AI voice failed (e.g. its service has no valid key or credits). Speak with the phone's
+      // own voice straight away, instead of retrying for several seconds while the call sits silent.
+      _voiceId = null;
+      _audio.clear();
+      setState(() => _saying = text);
+      _tts.speak(text);
     }
   }
 
@@ -766,6 +877,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   Future<void> _toggleCamera() async {
     final current = _camera;
     if (current != null) {
+      _clearPoints();
       setState(() => _camera = null);
       await current.dispose();
       return;
@@ -777,6 +889,8 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
       final back = _cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.back);
       _cameraIndex = back < 0 ? 0 : back;
       await _openCamera();
+      // Garad says what it sees, instead of waiting in silence.
+      unawaited(_greetOnCamera());
     } catch (_) {
       _flash(_t('Kamaradda lama heli karo. Hubi oggolaanshaha.', 'The camera is not available. Check the permission.'));
     }
@@ -797,14 +911,37 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
       return;
     }
     final old = _camera;
-    setState(() => _camera = controller);
+    setState(() {
+      _camera = controller;
+      _pluginMirrors = _previewIsMirrored(controller);
+    });
     await old?.dispose();
+  }
+
+  /// Whether [CameraPreview] shows [camera] mirrored. Back cameras never are. On iPhones and in
+  /// browsers the front camera is treated as mirrored, as before. Android's camera plugin (CameraX)
+  /// mirrors it only when it turns the picture itself, which depends on the phone's graphics: on
+  /// many phones it does, on others (and the emulator) it does not — so it is asked, instead of
+  /// always flipping, which made the second kind show a mirror image.
+  static bool _previewIsMirrored(CameraController camera) {
+    if (camera.description.lensDirection != CameraLensDirection.front) return false;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      // The plugin's preview widget says whether the screen's surface turns the picture itself
+      // (then the plugin does not mirror it).
+      final dynamic preview = camera.buildPreview();
+      final handledBySurface = preview.handlesCropAndRotation as bool;
+      return !handledBySurface;
+    } catch (_) {
+      return true; // can't tell: the plugin's usual mirrored front camera
+    }
   }
 
   Future<void> _flipCamera() async {
     if (_cameras.length < 2) return;
     _cameraIndex = (_cameraIndex + 1) % _cameras.length;
     _focusPoint = null; // the other camera starts focused on the middle
+    _clearPoints(); // the circles were on the other camera's picture
     try {
       await _openCamera();
     } catch (_) {
@@ -832,23 +969,16 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     }
   }
 
-  /// A picture of what the camera sees now, uploaded; null if that fails.
-  Future<String?> _captureFrame() async {
+  /// A picture of what the camera sees now (JPEG); null if that fails.
+  ///
+  /// Taken straight away, the way Gemini looks at the live picture: no focusing or exposure change
+  /// first — those made the preview jump (and added ~0.3 s) on every question. The camera keeps
+  /// focusing by itself, and tapping the picture focuses on a spot (see [_focusAt]).
+  Future<Uint8List?> _captureFrame() async {
     final camera = _camera;
-    final upload = widget.upload;
-    if (camera == null || upload == null || !camera.value.isInitialized || camera.value.isTakingPicture) return null;
+    if (camera == null || !camera.value.isInitialized || camera.value.isTakingPicture) return null;
     try {
-      // Sharp, not "good enough": focus and expose on what the user tapped (or the middle, where
-      // people hold a page) and give the lens a moment to settle before the picture.
-      final point = _focusPoint ?? const Offset(0.5, 0.5);
-      try {
-        await Future.wait([camera.setFocusPoint(point), camera.setExposurePoint(point)]);
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-      } catch (_) {
-        // This camera can't focus on a point: take it as it is.
-      }
-      final bytes = await (await camera.takePicture()).readAsBytes();
-      return await upload(bytes);
+      return await (await camera.takePicture()).readAsBytes();
     } catch (_) {
       return null;
     }
@@ -856,18 +986,13 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
 
   /// ⬆: share a photo; it goes with the next thing the user says.
   Future<void> _pickPhoto() async {
-    final upload = widget.upload;
-    if (upload == null) return;
+    if (!widget.seesImages) return;
     try {
       final file = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
       if (file == null || !mounted) return;
       final bytes = await file.readAsBytes();
-      final ref = upload(bytes);
-      ref.ignore(); // awaited with the next question; an error there is handled then
-      setState(() {
-        _photo = bytes;
-        _photoRef = ref;
-      });
+      if (!mounted) return;
+      setState(() => _photo = bytes);
     } catch (_) {
       _flash(_t('Sawirka lama furi karo.', 'Could not open the photo.'));
     }
@@ -1104,7 +1229,9 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
     _Phase.starting => '',
     _Phase.listening => chatStrings.listening,
     _Phase.thinking => _t('Waan ka fekerayaa…', 'Thinking…'),
-    _Phase.speaking => _t('Taabo si aad u joojiso', 'Tap to interrupt'),
+    _Phase.speaking => _canBargeIn
+        ? _t('Hadal si aad u joojiso', 'Speak to interrupt')
+        : _t('Taabo si aad u joojiso', 'Tap to interrupt'),
     _Phase.paused => _t('Makarafoonka waa xiran yahay', 'Microphone off'),
     _Phase.unavailable => _error ?? chatStrings.micUnavailable,
   };
@@ -1130,7 +1257,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
         (who: you, text: _heard, main: true)
       else if (_phase == _Phase.listening && lastSaid.isNotEmpty)
         (who: garad, text: lastSaid, main: false)
-      else if (_phase == _Phase.thinking)
+      else if (_phase == _Phase.thinking && _question.isNotEmpty)
         (who: you, text: _question, main: true)
       else if (_phase == _Phase.speaking) ...[
         if (_question.isNotEmpty) (who: you, text: _question, main: false),
@@ -1152,6 +1279,41 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
             ),
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: serifFont, color: textColor, fontSize: 30, height: 1.25),
+          ),
+        ),
+      );
+    }
+
+    if (onVideo) {
+      // On the video, as in Gemini Live: one short caption in a small glass box at the bottom, so
+      // the picture (and anything Garad circles on it) stays in view.
+      final line = lines.lastWhere((l) => l.main, orElse: () => lines.last);
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: SizedBox(
+            width: double.infinity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0x99000000),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0x33FFFFFF)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 11),
+                child: Text(
+                  _tail(line.text, 150),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: line.who == garad ? Colors.white : Colors.white70,
+                    fontSize: 15,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -1179,13 +1341,13 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
               ),
               const SizedBox(height: 4),
               Text(
-                line.text,
-                maxLines: line.main ? 7 : 2,
+                line.main ? _tail(line.text, 220) : line.text,
+                maxLines: line.main ? 5 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: serifFont,
                   color: line.main ? textColor : mutedColor,
-                  fontSize: line.main ? 23 : 16.5,
+                  fontSize: line.main ? 19 : 14.5,
                   height: 1.35,
                   shadows: shadows,
                 ),
@@ -1202,7 +1364,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     final camera = _camera;
     final muted = _phase == _Phase.paused || _phase == _Phase.unavailable;
-    final canAttach = widget.upload != null;
+    final canAttach = widget.seesImages;
     final c = Palette.of(context);
     // Over the camera picture: white text and glass buttons; otherwise the app's light page.
     final onVideo = _cameraOn;
@@ -1232,13 +1394,26 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
                         child: SizedBox(
                           width: camera.value.previewSize?.height ?? 1080,
                           height: camera.value.previewSize?.width ?? 1920,
-                          // The camera plugin shows the front camera like a mirror, which turns writing
-                          // held up to it backwards. Show it the right way round — as Garad sees it.
-                          child: camera.description.lensDirection == CameraLensDirection.front
+                          // The selfie camera like a mirror (as in Gemini Live), the back camera as the
+                          // world is: flipped only where the plugin shows it the other way.
+                          child: _showMirrored != _pluginMirrors
                               ? Transform.flip(flipX: true, child: CameraPreview(camera))
                               : CameraPreview(camera),
                         ),
                       ),
+                      // Where Garad points ("press this red button"): glowing rings on the video.
+                      for (final point in _shownPoints)
+                        _PointRing(
+                          center: pictureToScreen(
+                            point.x,
+                            point.y,
+                            Size(camera.value.previewSize?.height ?? 1080, camera.value.previewSize?.width ?? 1920),
+                            box.biggest,
+                            mirrored: _showMirrored,
+                          ),
+                          label: point.label,
+                          pulse: _clock,
+                        ),
                       if (_focusPoint case final p? when _focusRing?.isActive ?? false)
                         Positioned(
                           left: p.dx * box.maxWidth - 32,
@@ -1359,10 +1534,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
                           right: -8,
                           top: -8,
                           child: GestureDetector(
-                            onTap: () => setState(() {
-                              _photo = null;
-                              _photoRef = null;
-                            }),
+                            onTap: () => setState(() => _photo = null),
                             child: CircleAvatar(
                               radius: 12,
                               backgroundColor: c.text,
@@ -1392,8 +1564,10 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
                         onVideo: onVideo,
                         onTap: canAttach ? _pickPhoto : null,
                       ),
+                      // Interrupt by just talking where the phone allows it (iPhone; Android with
+                      // earphones) — no button, as in Gemini Live. Elsewhere a tap on the pill.
                       GestureDetector(
-                        onTap: _interrupt,
+                        onTap: _canBargeIn ? null : _interrupt,
                         child: AnimatedBuilder(
                           animation: _clock,
                           builder: (_, _) => _LivePill(level: muted ? 0 : _level),
@@ -1428,6 +1602,79 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
 
 /// A 46 px round button: light grey with a dark icon on the white page, white glass over the
 /// camera. [active] = Garad purple with a white icon (camera on, mic off); [danger] = red (end call).
+/// Garad pointing at something on the video, like Gemini Live: a softly pulsing ring around the
+/// spot, with a short label ("Power button") under it.
+class _PointRing extends StatelessWidget {
+  const _PointRing({required this.center, required this.label, required this.pulse});
+
+  final Offset center;
+  final String label;
+  final Animation<double> pulse;
+
+  static const _size = 132.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = Palette.of(context).brand;
+    return Positioned(
+      left: center.dx - _size / 2,
+      top: center.dy - _size / 2,
+      width: _size,
+      height: _size + 34,
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: pulse,
+          builder: (_, _) {
+            // Three gentle beats per turn of the call's clock.
+            final beat = (math.sin(pulse.value * math.pi * 2 * 6) + 1) / 2;
+            final ring = 54.0 + 6 * beat;
+            return Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.topCenter,
+              children: [
+                Positioned(
+                  top: (_size - ring) / 2,
+                  child: Container(
+                    width: ring,
+                    height: ring,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(color: brand.withValues(alpha: 0.55 + 0.25 * beat), blurRadius: 18, spreadRadius: 3),
+                        const BoxShadow(color: Color(0x66000000), blurRadius: 6),
+                      ],
+                    ),
+                  ),
+                ),
+                if (label.isNotEmpty)
+                  Positioned(
+                    top: (_size + ring) / 2 + 6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xB3000000),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0x33FFFFFF)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _RoundButton extends StatelessWidget {
   const _RoundButton({
     required this.icon,

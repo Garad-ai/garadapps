@@ -81,34 +81,49 @@ class GaradApi {
 
   /// Chat without an account: this phone's guest login (the server limits messages per day).
   Future<({String token, GaradUser user})> guest(String deviceId) async {
-    final data =
-        await _send('POST', '/auth/guest', body: {'device_id': deviceId, 'device_name': _deviceName})
-            as Map<String, dynamic>;
+    final data = await _send(
+      'POST',
+      '/auth/guest',
+      body: {'device_id': deviceId, 'device_name': _deviceName},
+    ) as Map<String, dynamic>;
     return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
 
+  /// One "Full name" — the server splits it into the website's first name and surname.
   Future<({String token, GaradUser user})> register({
-    required String name,
-    required String surname,
+    required String fullName,
     required String phone,
-    required String country,
     required String email,
     required String password,
-    required String passwordConfirmation,
   }) async {
     final data = await _send(
       'POST',
       '/auth/register',
-      body: {
-        'name': name,
-        'surname': surname,
-        'phone': phone,
-        'country': country,
-        'email': email,
-        'password': password,
-        'password_confirmation': passwordConfirmation,
-        'device_name': _deviceName,
-      },
+      body: {'full_name': fullName, 'phone': phone, 'email': email, 'password': password, 'device_name': _deviceName},
+    ) as Map<String, dynamic>;
+    return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
+  /// The server's Google OAuth *web* client ID (public), passed to Google as "serverClientId" so the
+  /// ID token is made for our server. Null when Google sign-in isn't set up there. Asked once.
+  Future<String?> googleClientId() => _googleClientId ??= () async {
+    try {
+      final data = await _send('GET', '/auth/google') as Map<String, dynamic>;
+      final id = (data['client_id'] as String?)?.trim();
+      return (id == null || id.isEmpty) ? null : id;
+    } catch (_) {
+      _googleClientId = null; // try again next time (e.g. was offline)
+      rethrow;
+    }
+  }();
+  Future<String?>? _googleClientId;
+
+  /// "Continue with Google": the server checks Google's ID token and signs in (or creates) the account.
+  Future<({String token, GaradUser user})> googleLogin(String idToken) async {
+    final data = await _send(
+      'POST',
+      '/auth/google',
+      body: {'id_token': idToken, 'device_name': _deviceName},
     ) as Map<String, dynamic>;
     return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
@@ -223,6 +238,17 @@ class GaradApi {
   }
 
   /// The AI voices for calls (five people, different ages and accents).
+  /// The picture beside the website's sign-in (video, slides…), for the first screen. Null when it
+  /// can't be had — the first screen then shows just the Garad logo.
+  Future<WelcomeVisual?> welcomeVisual() async {
+    try {
+      final data = await _send('GET', '/welcome');
+      return data is Map<String, dynamic> ? WelcomeVisual.fromJson(data) : null;
+    } on ApiException {
+      return null;
+    }
+  }
+
   Future<List<AiVoice>> voices() async {
     final data = await _send('GET', '/voices') as Map<String, dynamic>;
     return [for (final v in data['data'] as List) AiVoice.fromJson(v as Map<String, dynamic>)];
@@ -231,10 +257,11 @@ class GaradApi {
   /// A short-lived key for a Garad Live call (OpenAI's realtime model). The server keeps the real
   /// OpenAI key; this one only works to start one call within a few minutes.
   Future<LiveKey> liveSession({String? voice, required bool somali}) async {
-    final data = await _send('POST', '/live/session', body: {
-      'voice': ?voice,
-      'language': somali ? 'so' : 'en',
-    }) as Map<String, dynamic>;
+    final data = await _send(
+      'POST',
+      '/live/session',
+      body: {'voice': ?voice, 'language': somali ? 'so' : 'en'},
+    ) as Map<String, dynamic>;
     return LiveKey(key: data['key'] as String, model: data['model'] as String);
   }
 
@@ -275,8 +302,12 @@ class GaradApi {
   Future<List<WebPhoto>> photos(String query) => _webPhotos.putIfAbsent(query, () async {
     try {
       // A new picture is made by the AI on the server (about 15 s, longer when several at once).
-      final data =
-          await _send('GET', '/images', query: {'q': query}, timeout: const Duration(minutes: 2)) as Map<String, dynamic>;
+      final data = await _send(
+        'GET',
+        '/images',
+        query: {'q': query},
+        timeout: const Duration(minutes: 2),
+      ) as Map<String, dynamic>;
       return [
         for (final item in data['data'] as List)
           if (item is Map<String, dynamic>) WebPhoto.fromJson(item),
@@ -403,6 +434,94 @@ class GaradApi {
       'timezone': await localTimezone(),
     });
   }
+
+  /// One turn of a voice/camera call (POST /call/turn): straight to Claude, without the chat's tools
+  /// and memory, so the first words come back fast. [history] is the call so far (oldest first) and
+  /// [images] what goes with the words — the camera's view now, a shared photo — sent inline (no
+  /// upload first). The server saves the turn to [conversationId]. Yields the answer piece by piece;
+  /// cancelling the subscription stops it.
+  ///
+  /// [cameraOn]: the user just turned the camera on — Garad speaks first about what it sees in
+  /// [images] ("Hey, I can see you…"); [text] is not used and the turn is not saved as a message.
+  /// [liveCamera]: the last of [images] is what the camera shows right now — Garad can point at
+  /// things in it ([CallPoint]s, circled on the video).
+  Stream<CallEvent> callTurn(
+    int conversationId,
+    String text, {
+    List<({String role, String text})> history = const [],
+    List<Uint8List> images = const [],
+    String? model,
+    String? language,
+    bool cameraOn = false,
+    bool liveCamera = false,
+  }) async* {
+    final pictures = [
+      for (final b in images)
+        if (_callImageType(b) case final type?) 'data:$type;base64,${base64Encode(b)}',
+    ];
+    final request = http.Request('POST', _uri('/call/turn'))
+      ..headers.addAll(_headers)
+      ..body = jsonEncode({
+        'conversation_id': conversationId,
+        if (cameraOn) 'kind': 'camera_on' else 'text': text,
+        if (history.isNotEmpty)
+          'history': [
+            for (final h in history) {'role': h.role, 'text': h.text},
+          ],
+        if (pictures.isNotEmpty) 'images': pictures,
+        if (liveCamera && pictures.isNotEmpty) 'live_camera': true,
+        'model': ?model,
+        'language': ?language,
+        'timezone': await localTimezone(),
+      });
+
+    final http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException(chatStrings.timeout);
+    } catch (_) {
+      throw ApiException(chatStrings.cannotConnect);
+    }
+    if (response.statusCode != 200) {
+      _decode(response.statusCode, await response.stream.bytesToString());
+      throw ApiException(chatStrings.somethingWrong, statusCode: response.statusCode);
+    }
+
+    // "event: delta / point / done / error" then "data: {json}" per frame.
+    var event = '';
+    await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+      if (line.startsWith('event:')) {
+        event = line.substring(6).trim();
+        continue;
+      }
+      if (!line.startsWith('data:')) continue;
+      final json = _tryJson(line.substring(5).trim());
+      if (json is! Map) continue;
+      switch (event) {
+        case 'delta':
+          final piece = json['text'];
+          if (piece is String && piece.isNotEmpty) yield CallWords(piece);
+        case 'point':
+          final (x, y) = (json['x'], json['y']);
+          if (x is num && y is num) {
+            yield CallPoint(x.toDouble().clamp(0, 1), y.toDouble().clamp(0, 1), '${json['label'] ?? ''}'.trim());
+          }
+        case 'error':
+          throw ApiException(json['message'] is String ? json['message'] as String : chatStrings.somethingWrong);
+        case 'done':
+          return;
+      }
+    }
+  }
+
+  /// The picture type the call accepts (JPEG, PNG, WebP), or null for anything else.
+  static String? _callImageType(Uint8List bytes) => switch (imageName(bytes).split('.').last) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'jpg' => 'image/jpeg',
+    _ => null,
+  };
 
   Stream<ChatEvent> _stream(String path, Map<String, Object?> body) async* {
     final request = http.Request('POST', _uri(path))

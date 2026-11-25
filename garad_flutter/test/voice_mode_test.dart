@@ -287,7 +287,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('AI voice failing: asks again in the same voice, then the phone voice speaks instead of silence', (tester) async {
+  testWidgets('AI voice failing: the phone voice speaks straight away instead of silence', (tester) async {
     var tries = 0;
     final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     const sttChannel = MethodChannel('plugin.csdcorp.com/speech_to_text');
@@ -330,8 +330,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     await tester.pump(const Duration(seconds: 2));
-    expect(tries, 3, reason: 'the first try and two more, all in Oliver\'s voice');
-    expect(phoneSpoke, ['The AI voice is down.'], reason: 'the phone voice takes over instead of silence');
+    expect(tries, 1, reason: 'no retries: each retry was seconds of silence on the call');
+    expect(phoneSpoke, ['The AI voice is down.'], reason: 'the phone voice takes over straight away');
     expect(find.text('The AI voice is down.'), findsWidgets, reason: 'still shown as a caption');
 
     await tester.pump(const Duration(seconds: 3));
@@ -563,7 +563,7 @@ void main() {
                   MaterialPageRoute<void>(
                     builder: (_) => VoiceModeScreen(
                       ask: (text, images, onText) async => VoiceReply('Echo: $text'),
-                      upload: (bytes) async => '/dashboard/user/ai-chat-pro/attachments/test',
+                      seesImages: true,
                       cancel: () {},
                     ),
                   ),

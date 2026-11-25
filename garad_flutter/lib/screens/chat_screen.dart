@@ -79,9 +79,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// The model for voice calls (fast Claude Haiku by default; see [_openVoiceMode]).
   String? _voiceModelId;
 
-  /// AI voices for calls, and the one chosen (null = the phone's own voice).
+  /// Garad's natural voices for calls (ElevenLabs, an American man first) and the one picked. Empty:
+  /// the server has none set up, and Garad speaks with the phone's own voice.
   List<AiVoice> _aiVoices = const [];
   String? _aiVoiceId;
+
+  /// AI voices for calls, and the one chosen (null = the phone's own voice).
   bool _listening = false;
   bool? _speechReady;
 
@@ -137,12 +140,6 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _useModels(models));
     } on ApiException {
       // The picker stays hidden (or shows the last list); the server uses its default model.
-    }
-    // The AI voices for calls (an older server without them: the call keeps the phone's voice).
-    try {
-      _aiVoices = await _api.voices();
-    } on ApiException {
-      _aiVoices = const [];
     }
   }
 
@@ -442,80 +439,107 @@ class _ChatScreenState extends State<ChatScreen> {
     return done.future;
   }
 
-  /// Voice mode (the "Talk" button): a full-screen conversation with the animated orb.
-  /// Each turn goes through the normal chat, so it is saved like any other message.
+  /// Voice mode (the "Talk" button): a live voice and camera call, Gemini-style, on Claude.
+  /// Each turn goes straight to the call endpoint (see [_callTurn]); the server saves it to this
+  /// chat, which is reloaded when the call ends. Garad speaks with the phone's own voice.
   Future<void> _openVoiceMode() async {
     // Voice calls need an account (the shortcut and "open voice" links land here too).
     if (context.read<AuthState>().isGuest) return;
     if (_listening) await _speech.stop();
     await _tts.stop();
     if (!mounted) return;
-    // Calls use the fastest Claude (answers start in about 2 s instead of 4–5 s with Sonnet,
-    // and it sees the camera too), unless the user picks another model in the call.
-    // Only models that really see the camera are offered in calls (Claude for now; the server decides).
+    // Calls use Claude Haiku 5.5 — the fastest Claude, which also sees the camera — unless the user
+    // picks another model in the call. Only models that really see the camera are offered in calls.
     final callModels = _models.where((m) => m.seesImages).toList();
     if (!callModels.any((m) => m.id == _voiceModelId)) {
       _voiceModelId =
-          (callModels.where((m) => m.usable && m.id.startsWith('claude-haiku')).firstOrNull ??
+          (callModels.where((m) => m.usable && m.id == 'claude-haiku-5-5').firstOrNull ??
+                  callModels.where((m) => m.usable && m.id.startsWith('claude-haiku')).firstOrNull ??
                   callModels.where((m) => m.id == _modelId).firstOrNull ??
                   callModels.where((m) => m.usable).firstOrNull ??
                   _models.where((m) => m.id == _modelId).firstOrNull)
               ?.id;
     }
-    // The AI voices (fetched again if they had not arrived yet) and the voice picked last time, kept
-    // on this phone — so it never falls back to the phone's robotic voice. First call: an American voice.
-    if (_aiVoices.isEmpty) {
-      try {
-        _aiVoices = await _api.voices();
-      } on ApiException {
-        // No AI voices on this server: the phone's voice is the only one left.
-      }
-    }
-    if (_aiVoiceId == null && _aiVoices.isNotEmpty) {
-      final saved = await _loadVoiceChoice();
-      _aiVoiceId =
-          (_aiVoices.where((v) => v.id == saved).firstOrNull ??
-                  _aiVoices.where((v) => v.description.contains('American')).firstOrNull ??
-                  _aiVoices.first)
-              .id;
+    // The call continues this chat: its latest messages are the call's first context.
+    _callHistory
+      ..clear()
+      ..addAll(_recentForCall());
+    // Garad's voice: a natural ElevenLabs voice when the server has them (an American man first, or
+    // the one picked last time), the phone's own voice otherwise.
+    try {
+      _aiVoices = await _api.voices();
+    } on ApiException {
+      _aiVoices = const [];
     }
     if (!mounted) return;
+    if (!_aiVoices.any((v) => v.id == _aiVoiceId)) {
+      final saved = await _loadVoiceChoice();
+      _aiVoiceId = (_aiVoices.where((v) => v.id == saved).firstOrNull ?? _aiVoices.firstOrNull)?.id;
+    }
+    if (!mounted) return;
+    // Where Garad points on the live camera, for the call screen to circle.
+    final points = StreamController<CallPoint>.broadcast();
+    _callPoints = points;
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
         opaque: true,
         transitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (_, _, _) => VoiceModeScreen(
-          ask: (text, images, onText) async {
-            final reply = await _send(text, images, onText, _voiceModelId);
-            if (reply == null) return const VoiceReply.failed(null);
-            return reply.isError ? VoiceReply.failed(reply.content) : VoiceReply(reply.displayText);
-          },
-          upload: (bytes) => imageForAi(bytes).then(_api.uploadImage),
-          // Stop listening to an answer: cancel the stream (the server still finishes and saves it).
-          cancel: _stop,
-          userName: context.read<AuthState>().user?.name ?? '',
-          models: callModels.isEmpty ? _models : callModels,
-          modelId: _voiceModelId,
-          onModelChanged: (id) => _voiceModelId = id,
-          onNewChat: () => _openConversation(null),
+          ask: (text, pictures, onText) => _callTurn(
+            text,
+            [?pictures.photo, ?pictures.camera],
+            onText,
+            _voiceModelId,
+            liveCamera: pictures.camera != null,
+          ),
+          seesImages: callModels.isNotEmpty,
+          // Camera turned on: Garad looks and speaks first ("Hey, I can see you…").
+          greetCamera: (frame, onText) =>
+              _callTurn('', [frame], onText, _voiceModelId, cameraOn: true, liveCamera: true),
+          points: points.stream,
           voices: _aiVoices,
           voiceId: _aiVoiceId,
           onVoiceChanged: (id) {
             _aiVoiceId = id;
             if (id != null) _saveVoiceChoice(id);
           },
-          synthesize: _api.speech,
+          synthesize: _aiVoices.isEmpty ? null : _api.speech,
+          // The user cut in: stop the answer (what was said so far is still saved).
+          cancel: _stopCallTurn,
+          userName: context.read<AuthState>().user?.name ?? '',
+          models: callModels.isEmpty ? _models : callModels,
+          modelId: _voiceModelId,
+          onModelChanged: (id) => _voiceModelId = id,
+          onNewChat: () {
+            _callHistory.clear();
+            _openConversation(null);
+          },
         ),
         transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
       ),
     );
+    _stopCallTurn();
+    _callPoints = null;
+    unawaited(points.close());
     // The call's own voice took over the shared text-to-speech channel: take it back.
     if (mounted) _bindTts();
+    // The server saved the call's turns to this chat: show them.
+    if (mounted && _conversationId != null) unawaited(_refreshQuietly(force: true));
   }
+
+  /// The call so far (oldest first), sent with each turn so Garad remembers what was said.
+  final List<({String role, String text})> _callHistory = [];
+
+  /// The answer streaming now, and how to end it early (see [_stopCallTurn]).
+  StreamSubscription<CallEvent>? _callReply;
+  VoidCallback? _endCallReply;
+
+  /// Where Garad points on the live camera during the open call (null when no call is open).
+  StreamController<CallPoint>? _callPoints;
 
   static const _voiceKey = 'garad_call_voice';
 
-  /// The AI voice picked for calls last time, remembered on this phone.
+  /// The voice picked for calls last time, remembered on this phone.
   Future<String?> _loadVoiceChoice() async {
     try {
       return await const AppStorage().read(key: _voiceKey);
@@ -525,6 +549,97 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _saveVoiceChoice(String id) => const AppStorage().write(key: _voiceKey, value: id).catchError((_) {});
+
+  /// The chat's latest messages, as context for a call started in it.
+  List<({String role, String text})> _recentForCall() {
+    final recent = <({String role, String text})>[];
+    for (final m in _messages.reversed) {
+      if (m.isError) continue;
+      final words = (m.role == 'user' ? m.content : m.displayText).trim();
+      if (words.isEmpty) continue;
+      recent.insert(0, (role: m.role == 'user' ? 'user' : 'assistant', text: words.length > 1500 ? words.substring(0, 1500) : words));
+      if (recent.length == 8) break;
+    }
+    return recent;
+  }
+
+  /// One turn of the call: what the user said (and what the camera sees) to Claude through the call
+  /// endpoint, the answer streamed back to [onText] as it comes. Creates the chat on the first turn.
+  /// [cameraOn]: the camera was just turned on and Garad speaks first about what it sees.
+  /// [liveCamera]: the last of [images] is the camera's view now — Garad may point at things in it.
+  Future<VoiceReply> _callTurn(
+    String text,
+    List<Uint8List> images,
+    ValueChanged<String> onText,
+    String? model, {
+    bool cameraOn = false,
+    bool liveCamera = false,
+  }) async {
+    _stopCallTurn();
+    try {
+      if (_conversationId == null) {
+        final created = await _api.createConversation();
+        _conversationId = created.id;
+        _rememberChat(created.id);
+      }
+    } on ApiException catch (e) {
+      return VoiceReply.failed(e.message);
+    }
+    // A photo with transparency is flattened so Claude does not see it on white (see imageForAi).
+    final pictures = await Future.wait(images.map(imageForAi));
+
+    final done = Completer<VoiceReply>();
+    final answer = StringBuffer();
+    void finish([String? error]) {
+      if (done.isCompleted) return;
+      _callReply = null;
+      _endCallReply = null;
+      final said = answer.toString().trim();
+      // What Garad said is remembered, even when the user cut in half-way. (After the camera hello,
+      // the call remembers that the camera is on and what Garad said about it.)
+      _callHistory.add((role: 'user', text: cameraOn ? '(I turned my camera on.)' : text));
+      if (said.isNotEmpty) _callHistory.add((role: 'assistant', text: said));
+      done.complete(said.isEmpty ? VoiceReply.failed(error) : VoiceReply(said));
+    }
+
+    _endCallReply = finish;
+    _callReply = _api
+        .callTurn(
+          _conversationId!,
+          text,
+          history: List.of(_callHistory),
+          images: pictures,
+          model: model,
+          language: chatStrings.isSomali ? 'so' : 'en',
+          cameraOn: cameraOn,
+          liveCamera: liveCamera,
+        )
+        .listen(
+          (event) {
+            switch (event) {
+              case CallWords(text: final words):
+                answer.write(words);
+                onText(answer.toString());
+              case CallPoint():
+                _callPoints?.add(event);
+            }
+          },
+          onError: (Object e) => finish(e is ApiException ? e.message : chatStrings.somethingWrong),
+          onDone: finish,
+          cancelOnError: true,
+        );
+    return done.future;
+  }
+
+  /// Ends the answer streaming now, if any (the user cut in, or the call ended).
+  void _stopCallTurn() {
+    final sub = _callReply;
+    final end = _endCallReply;
+    _callReply = null;
+    _endCallReply = null;
+    sub?.cancel();
+    end?.call();
+  }
 
   /// Read aloud for answers. flutter_tts has one channel for the whole app and the newest FlutterTts
   /// receives its events, so this is redone after voice mode (which has its own) closes.

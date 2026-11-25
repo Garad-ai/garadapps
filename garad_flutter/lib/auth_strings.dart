@@ -5,22 +5,14 @@ class AuthStrings {
   const AuthStrings._({
     required this.signIn,
     required this.signUp,
-    required this.googleLogin,
-    required this.or,
-    required this.name,
-    required this.nameHint,
-    required this.lastName,
-    required this.lastNameHint,
+    required this.fullName,
+    required this.fullNameHint,
     required this.phone,
     required this.phoneHint,
-    required this.country,
-    required this.countryHint,
     required this.email,
     required this.emailHint,
     required this.password,
     required this.passwordHint,
-    required this.confirmPassword,
-    required this.confirmPasswordHint,
     required this.rememberMe,
     required this.forgotPassword,
     required this.noAccount,
@@ -34,28 +26,18 @@ class AuthStrings {
     required this.invalidEmail,
     required this.invalidPhone,
     required this.passwordShort,
-    required this.passwordsDiffer,
-    required this.comingSoon,
   });
 
   final String signIn;
   final String signUp;
-  final String googleLogin;
-  final String or;
-  final String name;
-  final String nameHint;
-  final String lastName;
-  final String lastNameHint;
+  final String fullName;
+  final String fullNameHint;
   final String phone;
   final String phoneHint;
-  final String country;
-  final String countryHint;
   final String email;
   final String emailHint;
   final String password;
   final String passwordHint;
-  final String confirmPassword;
-  final String confirmPasswordHint;
   final String rememberMe;
   final String forgotPassword;
   final String noAccount;
@@ -69,29 +51,19 @@ class AuthStrings {
   final String invalidEmail;
   final String invalidPhone;
   final String passwordShort;
-  final String passwordsDiffer;
-  final String comingSoon;
 }
 
 const _so = AuthStrings._(
   signIn: 'Gal',
   signUp: 'Is diiwaangeli',
-  googleLogin: 'Ku gal Google',
-  or: 'ama',
-  name: 'Magaca',
-  nameHint: 'Magacaaga',
-  lastName: 'Magaca dambe',
-  lastNameHint: 'Magacaaga dambe',
+  fullName: 'Magaca oo buuxa',
+  fullNameHint: 'Magacaaga oo buuxa',
   phone: 'Taleefanka',
   phoneHint: 'Lambarka taleefankaaga',
-  country: 'Dalka',
-  countryHint: 'Dalkaaga',
   email: 'Iimaylka',
   emailHint: 'iimaylkaaga@email.com',
   password: 'Furaha sirta ah',
   passwordHint: 'Furahaaga sirta ah',
-  confirmPassword: 'Xaqiiji furaha sirta ah',
-  confirmPasswordHint: 'Mar kale qor furaha',
   rememberMe: 'I xasuuso',
   forgotPassword: 'Furaha ma ilowday?',
   noAccount: 'Akoon ma lihid?',
@@ -105,29 +77,19 @@ const _so = AuthStrings._(
   invalidEmail: 'Iimayl sax ah geli',
   invalidPhone: 'Lambar taleefan oo sax ah geli',
   passwordShort: 'Ugu yaraan 8 xaraf',
-  passwordsDiffer: 'Furayaashu isma lahan',
-  comingSoon: 'Dhawaan ayuu imanayaa.',
 );
 
 const _en = AuthStrings._(
   signIn: 'Sign in',
   signUp: 'Sign up',
-  googleLogin: 'Login with Google',
-  or: 'or',
-  name: 'Name',
-  nameHint: 'Your Name',
-  lastName: 'Last name',
-  lastNameHint: 'Your Last Name',
+  fullName: 'Full name',
+  fullNameHint: 'Your full name',
   phone: 'Phone',
   phoneHint: 'Your Phone Number',
-  country: 'Country',
-  countryHint: 'Your Country',
   email: 'Email Address',
   emailHint: 'your@email.com',
   password: 'Password',
   passwordHint: 'Your password',
-  confirmPassword: 'Confirm Your Password',
-  confirmPasswordHint: 'Password confirmation',
   rememberMe: 'Remember me',
   forgotPassword: 'Forgot password?',
   noAccount: "Don't have account yet?",
@@ -141,8 +103,6 @@ const _en = AuthStrings._(
   invalidEmail: 'Enter a valid email',
   invalidPhone: 'Enter a valid phone number',
   passwordShort: 'At least 8 characters',
-  passwordsDiffer: 'The passwords do not match',
-  comingSoon: 'Coming soon.',
 );
 
 final AuthStrings authStrings = PlatformDispatcher.instance.locale.languageCode == 'en' ? _en : _so;

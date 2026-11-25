@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/garad_api.dart';
+import '../api/models.dart';
 import '../auth_state.dart';
 import '../auth_strings.dart';
 import '../chat_strings.dart';
 import '../theme.dart';
+import '../widgets/auth_background.dart';
 
 /// Links shown under the form. Set at build time, e.g.
 ///   --dart-define=TERMS_URL=https://garad.ai/terms --dart-define=PRIVACY_URL=https://garad.ai/privacy
@@ -28,13 +30,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _form = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _lastName = TextEditingController();
+  final _fullName = TextEditingController();
   final _phone = TextEditingController();
-  final _country = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _confirm = TextEditingController();
 
   bool _signUp = false;
   bool _remember = true;
@@ -42,28 +41,26 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showPassword = false;
   String? _error;
 
+  /// The website's sign-in video (or slides) behind the form, as on the welcome screen.
+  WelcomeVisual? _visual;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVisual();
+  }
+
+  Future<void> _loadVisual() async {
+    final visual = await context.read<AuthState>().api.welcomeVisual();
+    if (mounted && visual != null && !visual.isEmpty) setState(() => _visual = visual);
+  }
+
   @override
   void dispose() {
-    for (final c in [_name, _lastName, _phone, _country, _email, _password, _confirm]) {
+    for (final c in [_fullName, _phone, _email, _password]) {
       c.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _continueAsGuest() async {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await context.read<AuthState>().continueAsGuest();
-      _closeIfPushed();
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<void> _submit() async {
@@ -76,15 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthState>();
     try {
       if (_signUp) {
-        await auth.register(
-          name: _name.text,
-          surname: _lastName.text,
-          phone: _phone.text,
-          country: _country.text,
-          email: _email.text,
-          password: _password.text,
-          passwordConfirmation: _confirm.text,
-        );
+        await auth.register(fullName: _fullName.text, phone: _phone.text, email: _email.text, password: _password.text);
       } else {
         await auth.login(_email.text, _password.text, remember: _remember);
       }
@@ -149,10 +138,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(t(
-                    'Geli email-kaaga. Waxaan kuu soo diraynaa link aad ku beddesho furaha.',
-                    'Enter your email. We will send you a link to choose a new password.',
-                  )),
+                  Text(
+                    t(
+                      'Geli email-kaaga. Waxaan kuu soo diraynaa link aad ku beddesho furaha.',
+                      'Enter your email. We will send you a link to choose a new password.',
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: email,
@@ -185,8 +176,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (sent != null && sent.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(sent)));
   }
 
-  void _soon() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authStrings.comingSoon)));
-
   Future<void> _open(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 
   String? _requiredText(String? v) => (v == null || v.trim().isEmpty) ? authStrings.required : null;
@@ -197,245 +186,197 @@ class _LoginScreenState extends State<LoginScreen> {
     final s = authStrings;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final card = dark ? c.surface : Colors.white;
+    final visual = _visual;
 
     return Scaffold(
-      backgroundColor: dark ? c.background : const Color(0xFFEDEDF0),
+      backgroundColor: visual != null ? Colors.black : (dark ? c.background : const Color(0xFFEDEDF0)),
+      extendBodyBehindAppBar: visual != null,
       // Opened from the welcome screen or the guest chat: a way back.
       appBar: Navigator.of(context).canPop()
-          ? AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, foregroundColor: c.text)
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              foregroundColor: visual != null ? Colors.white : c.text,
+            )
           : null,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20)),
-                child: Form(
-                  key: _form,
-                  child: AutofillGroup(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Image.asset('assets/images/splash-icon.png', height: 30, semanticLabel: 'Garad AI'),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _signUp ? s.signUp : s.signIn,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
-                        ),
-                        const SizedBox(height: 18),
-                        OutlinedButton(
-                          onPressed: _soon,
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(46),
-                            side: BorderSide(color: c.line),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            foregroundColor: c.text,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text(
-                                'G',
-                                style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w800, fontSize: 17),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(s.googleLogin, style: const TextStyle(fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Row(
-                            children: [
-                              Expanded(child: Divider(color: c.line)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                child: Text(s.or, style: TextStyle(color: c.faint, fontSize: 11)),
-                              ),
-                              Expanded(child: Divider(color: c.line)),
-                            ],
-                          ),
-                        ),
-                        if (_signUp) ...[
-                          _Field(
-                            label: '${s.name} *',
-                            hint: s.nameHint,
-                            controller: _name,
-                            autofill: AutofillHints.givenName,
-                            validator: _requiredText,
-                          ),
-                          _Field(
-                            label: '${s.lastName} *',
-                            hint: s.lastNameHint,
-                            controller: _lastName,
-                            autofill: AutofillHints.familyName,
-                            validator: _requiredText,
-                          ),
-                          _Field(
-                            label: '${s.phone} *',
-                            hint: s.phoneHint,
-                            controller: _phone,
-                            keyboard: TextInputType.phone,
-                            autofill: AutofillHints.telephoneNumber,
-                            validator: (v) {
-                              final value = v?.trim() ?? '';
-                              if (value.isEmpty) return s.required;
-                              return RegExp(r'^\+?[0-9 ()-]{6,32}$').hasMatch(value) ? null : s.invalidPhone;
-                            },
-                          ),
-                          _Field(
-                            label: '${s.country} *',
-                            hint: s.countryHint,
-                            controller: _country,
-                            autofill: AutofillHints.countryName,
-                            validator: _requiredText,
-                          ),
-                        ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // The website's sign-in video behind the card, darkened so the card stands out.
+          if (visual != null) ...[AuthBackground(visual: visual), const ColoredBox(color: Color(0x73000000))],
+          _card(c, s, card),
+        ],
+      ),
+    );
+  }
+
+  /// The white Sign in / Sign up card, centred and scrolling above the keyboard.
+  Widget _card(Palette c, AuthStrings s, Color card) {
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+              decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20)),
+              child: Form(
+                key: _form,
+                child: AutofillGroup(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Image.asset('assets/images/splash-icon.png', height: 30, semanticLabel: 'Garad AI'),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _signUp ? s.signUp : s.signIn,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
+                      ),
+                      // Google and Skip are on the welcome screen, so this page is the email form alone.
+                      const SizedBox(height: 18),
+                      if (_signUp) ...[
                         _Field(
-                          label: _signUp ? '${s.email} *' : s.email,
-                          hint: s.emailHint,
-                          controller: _email,
-                          keyboard: TextInputType.emailAddress,
-                          autofill: AutofillHints.email,
+                          label: '${s.fullName} *',
+                          hint: s.fullNameHint,
+                          controller: _fullName,
+                          keyboard: TextInputType.name,
+                          capitalize: true,
+                          autofill: AutofillHints.name,
+                          validator: _requiredText,
+                        ),
+                        _Field(
+                          label: '${s.phone} *',
+                          hint: s.phoneHint,
+                          controller: _phone,
+                          keyboard: TextInputType.phone,
+                          autofill: AutofillHints.telephoneNumber,
                           validator: (v) {
                             final value = v?.trim() ?? '';
                             if (value.isEmpty) return s.required;
-                            return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value) ? null : s.invalidEmail;
+                            return RegExp(r'^\+?[0-9 ()-]{6,32}$').hasMatch(value) ? null : s.invalidPhone;
                           },
-                        ),
-                        _Field(
-                          label: _signUp ? '${s.password} *' : s.password,
-                          hint: s.passwordHint,
-                          controller: _password,
-                          obscure: !_showPassword,
-                          autofill: _signUp ? AutofillHints.newPassword : AutofillHints.password,
-                          suffix: IconButton(
-                            icon: Icon(
-                              _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              size: 18,
-                              color: c.faint,
-                            ),
-                            onPressed: () => setState(() => _showPassword = !_showPassword),
-                          ),
-                          onSubmitted: _signUp ? null : (_) => _submit(),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return s.required;
-                            if (_signUp && v.length < 8) return s.passwordShort;
-                            return null;
-                          },
-                        ),
-                        if (_signUp)
-                          _Field(
-                            label: '${s.confirmPassword} *',
-                            hint: s.confirmPasswordHint,
-                            controller: _confirm,
-                            obscure: !_showPassword,
-                            autofill: AutofillHints.newPassword,
-                            onSubmitted: (_) => _submit(),
-                            validator: (v) => v != _password.text ? s.passwordsDiffer : null,
-                          ),
-                        if (!_signUp)
-                          Row(
-                            children: [
-                              SizedBox.square(
-                                dimension: 22,
-                                child: Checkbox(
-                                  value: _remember,
-                                  activeColor: c.brand,
-                                  visualDensity: VisualDensity.compact,
-                                  onChanged: (v) => setState(() => _remember = v ?? true),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(s.rememberMe, style: TextStyle(fontSize: 12, color: c.muted)),
-                              const Spacer(),
-                              TextButton(
-                                onPressed: _busy ? null : _forgotPassword,
-                                style: TextButton.styleFrom(foregroundColor: c.brand, padding: EdgeInsets.zero),
-                                child: Text(s.forgotPassword, style: const TextStyle(fontSize: 12)),
-                              ),
-                            ],
-                          ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 8),
-                          Text(_error!, style: TextStyle(color: c.danger, fontSize: 13)),
-                        ],
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: _busy ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _buttonViolet,
-                            disabledBackgroundColor: _buttonViolet.withValues(alpha: 0.6),
-                            minimumSize: const Size.fromHeight(50),
-                            shape: const StadiumBorder(),
-                          ),
-                          child: _busy
-                              ? const SizedBox.square(
-                                  dimension: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                                )
-                              : Text(
-                                  _signUp ? s.signUp : s.signIn,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-                                ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Chat without an account, ChatGPT style (limited messages, no files or images).
-                        OutlinedButton(
-                          onPressed: _busy ? null : _continueAsGuest,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: c.text,
-                            minimumSize: const Size.fromHeight(48),
-                            shape: const StadiumBorder(),
-                            side: BorderSide(color: c.line),
-                          ),
-                          child: Text(chatStrings.continueWithoutAccount),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(_signUp ? s.haveAccount : s.noAccount, style: TextStyle(fontSize: 12, color: c.muted)),
-                            TextButton(
-                              onPressed: _busy ? null : _switchMode,
-                              style: TextButton.styleFrom(foregroundColor: c.brand),
-                              child: Text(_signUp ? s.signIn : s.signUp, style: const TextStyle(fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.lock, size: 13, color: c.muted),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(s.dataSafe, style: TextStyle(fontSize: 11.5, color: c.muted)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text.rich(
-                          TextSpan(
-                            style: TextStyle(fontSize: 11.5, color: c.muted, height: 1.6),
-                            children: [
-                              TextSpan(text: '${s.agreePrefix} '),
-                              _link(s.terms, _termsUrl, c),
-                              TextSpan(text: '\n${s.readOur} '),
-                              _link(s.privacy, _privacyUrl, c),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
                         ),
                       ],
-                    ),
+                      _Field(
+                        label: _signUp ? '${s.email} *' : s.email,
+                        hint: s.emailHint,
+                        controller: _email,
+                        keyboard: TextInputType.emailAddress,
+                        autofill: AutofillHints.email,
+                        validator: (v) {
+                          final value = v?.trim() ?? '';
+                          if (value.isEmpty) return s.required;
+                          return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value) ? null : s.invalidEmail;
+                        },
+                      ),
+                      _Field(
+                        label: _signUp ? '${s.password} *' : s.password,
+                        hint: s.passwordHint,
+                        controller: _password,
+                        obscure: !_showPassword,
+                        autofill: _signUp ? AutofillHints.newPassword : AutofillHints.password,
+                        suffix: IconButton(
+                          icon: Icon(
+                            _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            size: 18,
+                            color: c.faint,
+                          ),
+                          onPressed: () => setState(() => _showPassword = !_showPassword),
+                        ),
+                        onSubmitted: (_) => _submit(),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return s.required;
+                          if (_signUp && v.length < 8) return s.passwordShort;
+                          return null;
+                        },
+                      ),
+                      if (!_signUp)
+                        Row(
+                          children: [
+                            SizedBox.square(
+                              dimension: 22,
+                              child: Checkbox(
+                                value: _remember,
+                                activeColor: c.brand,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (v) => setState(() => _remember = v ?? true),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(s.rememberMe, style: TextStyle(fontSize: 12, color: c.muted)),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: _busy ? null : _forgotPassword,
+                              style: TextButton.styleFrom(foregroundColor: c.brand, padding: EdgeInsets.zero),
+                              child: Text(s.forgotPassword, style: const TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_error!, style: TextStyle(color: c.danger, fontSize: 13)),
+                      ],
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _busy ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _buttonViolet,
+                          disabledBackgroundColor: _buttonViolet.withValues(alpha: 0.6),
+                          minimumSize: const Size.fromHeight(50),
+                          shape: const StadiumBorder(),
+                        ),
+                        child: _busy
+                            ? const SizedBox.square(
+                                dimension: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                              )
+                            : Text(
+                                _signUp ? s.signUp : s.signIn,
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                              ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(_signUp ? s.haveAccount : s.noAccount, style: TextStyle(fontSize: 12, color: c.muted)),
+                          TextButton(
+                            onPressed: _busy ? null : _switchMode,
+                            style: TextButton.styleFrom(foregroundColor: c.brand),
+                            child: Text(_signUp ? s.signIn : s.signUp, style: const TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.lock, size: 13, color: c.muted),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(s.dataSafe, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text.rich(
+                        TextSpan(
+                          style: TextStyle(fontSize: 11.5, color: c.muted, height: 1.6),
+                          children: [
+                            TextSpan(text: '${s.agreePrefix} '),
+                            _link(s.terms, _termsUrl, c),
+                            TextSpan(text: '\n${s.readOur} '),
+                            _link(s.privacy, _privacyUrl, c),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -463,6 +404,7 @@ class _Field extends StatelessWidget {
     this.keyboard,
     this.autofill,
     this.obscure = false,
+    this.capitalize = false,
     this.suffix,
     this.onSubmitted,
   });
@@ -474,6 +416,9 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboard;
   final String? autofill;
   final bool obscure;
+
+  /// Capital letter at the start of each word (names).
+  final bool capitalize;
   final Widget? suffix;
   final ValueChanged<String>? onSubmitted;
 
@@ -500,6 +445,7 @@ class _Field extends StatelessWidget {
             keyboardType: keyboard,
             obscureText: obscure,
             autocorrect: false,
+            textCapitalization: capitalize ? TextCapitalization.words : TextCapitalization.none,
             autofillHints: autofill == null ? null : [autofill!],
             textInputAction: onSubmitted == null ? TextInputAction.next : TextInputAction.done,
             onFieldSubmitted: onSubmitted,

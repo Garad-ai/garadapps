@@ -6,6 +6,7 @@ import 'package:garad_ai/app_storage.dart';
 
 import 'api/garad_api.dart';
 import 'api/models.dart';
+import 'google_login.dart';
 
 /// Who is signed in. The login token is kept in the phone's secure storage (Keychain / Keystore).
 class AuthState extends ChangeNotifier {
@@ -84,24 +85,38 @@ class AuthState extends ChangeNotifier {
   }
 
   Future<void> register({
-    required String name,
-    required String surname,
+    required String fullName,
     required String phone,
-    required String country,
     required String email,
     required String password,
-    required String passwordConfirmation,
   }) async {
     final result = await api.register(
-      name: name.trim(),
-      surname: surname.trim(),
+      fullName: fullName.trim().replaceAll(RegExp(r'\s+'), ' '),
       phone: phone.trim(),
-      country: country.trim(),
       email: email.trim(),
       password: password,
-      passwordConfirmation: passwordConfirmation,
     );
     await _save(result.token, result.user);
+  }
+
+  /// "Continue with Google": the phone's Google account picker, then the server checks the Google ID
+  /// token and signs in (the same account as "Login with Google" on garad.ai). Returns false if the
+  /// user closed the picker; throws [ApiException] with a message to show otherwise.
+  Future<bool> signInWithGoogle() async {
+    if (!GoogleLogin.supported) throw ApiException(GoogleLogin.text.notAvailable);
+    final clientId = await api.googleClientId();
+    if (clientId == null) throw ApiException(GoogleLogin.text.notAvailable);
+    final String idToken;
+    try {
+      final token = await GoogleLogin.idToken(clientId);
+      if (token == null) return false; // closed the account picker
+      idToken = token;
+    } on GoogleLoginFailed catch (e) {
+      throw ApiException(e.message);
+    }
+    final result = await api.googleLogin(idToken);
+    await _save(result.token, result.user);
+    return true;
   }
 
   Future<void> logout() async {
@@ -110,6 +125,8 @@ class AuthState extends ChangeNotifier {
     } on ApiException {
       // Signing out locally is what matters; the server token expires unused.
     }
+    // Forget the Google account choice too, so the next "Continue with Google" asks which account.
+    await GoogleLogin.signOut();
     await _clear();
     // Signed out on purpose: the next start shows the login screen, not a guest chat.
     await _storage.write(key: _signedOutKey, value: '1');
