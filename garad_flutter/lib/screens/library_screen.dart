@@ -203,7 +203,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           final LibraryImage image => _ImageTile(image: image, onTap: () => _openImage(image)),
           final LibraryFile file => _DocumentTile(
             file: file,
-            onTap: () => openDocument(context, file.id, title: file.title),
+            onTap: () => openDocument(context, file.id, title: file.title, kind: file.kind),
           ),
           _ => const SizedBox.shrink(),
         },

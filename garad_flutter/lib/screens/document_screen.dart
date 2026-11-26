@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
@@ -9,12 +10,16 @@ import '../api/models.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../theme.dart';
+import 'slides_screen.dart';
 
-/// Opens a created document's preview as a sheet over the chat, like Claude.
-Future<void> openDocument(BuildContext context, int id, {String? title}) => Navigator.of(context).push(
+/// Opens a created document's preview as a sheet over the chat, like Claude. A presentation opens as
+/// slides ([SlidesScreen]), like garad.ai's slide view.
+Future<void> openDocument(BuildContext context, int id, {String? title, String? kind}) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => DocumentScreen(id: id, title: title),
+    builder: (_) => kind == 'presentation' && !kIsWeb
+        ? SlidesScreen(id: id, title: title)
+        : DocumentScreen(id: id, title: title),
   ),
 );
 

@@ -1,0 +1,152 @@
+/* Colours follow the app's Palette (lib/theme.dart): the page behind the slides and the Grid. */
+:root {
+  --page: #faf9f5;
+  --card: #ffffff;
+  --text: #1d2421;
+  --muted: #69716d;
+  --line: #dedfda;
+  --brand: #514cff;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --page: #262624;
+  --card: #202622;
+  --text: #edf0ed;
+  --muted: #a1aaa5;
+  --line: #333b37;
+  --brand: #7773ff;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--page);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+
+.slide-area {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.slide-area.hidden {
+  visibility: hidden;
+}
+.slide-area > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+/* The renderer (react-pptx) frames the slide in its own beige panel with a border. Here the slide sits
+   on the app's page, centred, with a soft shadow; in Present, on black, edge to edge. */
+.slide-area .rpv-root {
+  border: 0;
+  background: transparent;
+  height: 100%;
+}
+.slide-area .rpv-stage,
+.slide-area .rpv-status {
+  background: var(--page);
+}
+.slide-area .rpv-viewport {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slide-area .rpv-viewport > * {
+  flex: none;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.14);
+}
+.slide-area.presenting,
+.slide-area.presenting .rpv-stage,
+.slide-area.presenting .rpv-status {
+  background: #000;
+}
+.slide-area.presenting .rpv-viewport {
+  padding: 0;
+}
+.slide-area.presenting .rpv-viewport > * {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-content: start;
+  -webkit-overflow-scrolling: touch;
+}
+.grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 500 12px/1.2 system-ui, -apple-system, Roboto, sans-serif;
+}
+.grid .frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+}
+.grid button.active .frame {
+  border-color: var(--brand);
+}
+.grid button.active {
+  color: var(--brand);
+}
+.grid img,
+.grid i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

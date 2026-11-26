@@ -545,7 +545,7 @@ class _FileCard extends StatelessWidget {
         ),
         subtitle: [documentKindLabel(file.kind), if (file.size != null) _size(file.size!)].join(' · '),
         trailing: Icon(Icons.chevron_right, size: 22, color: c.faint),
-        onTap: id == null ? null : () => openDocument(context, id, title: file.name),
+        onTap: id == null ? null : () => openDocument(context, id, title: file.name, kind: file.kind),
       ),
     );
   }
