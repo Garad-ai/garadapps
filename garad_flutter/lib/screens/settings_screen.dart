@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../theme.dart';
+import 'billing_screen.dart';
+import 'settings_pages.dart';
 
-const String _privacyUrl = String.fromEnvironment('PRIVACY_URL');
-
-/// Settings, Claude-style: ✕ · "Settings" · ⓘ, the account card, Account / App rows,
-/// Appearance (Light / Dark / System) and Log out.
+/// Settings, ChatGPT/Claude-style: ✕ · "Settings" · ⓘ, the account card (opens Profile),
+/// Account / App rows, Appearance (Light / Dark / System) and Log out.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.onOpenScheduled});
+  const SettingsScreen({super.key, required this.onOpenScheduled, this.onChatsDeleted});
 
   final VoidCallback onOpenScheduled;
+
+  /// Privacy → Delete all chats: the chat screen starts a new chat.
+  final VoidCallback? onChatsDeleted;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +25,7 @@ class SettingsScreen extends StatelessWidget {
     final user = context.watch<AuthState>().user;
     final app = context.watch<AppState>();
 
-    void soon() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.comingSoon)));
+    void open(Widget page) => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
 
     return Scaffold(
       backgroundColor: c.background,
@@ -41,48 +43,40 @@ class SettingsScreen extends StatelessWidget {
                     style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w600),
                   ),
                 ),
-                _RoundButton(
-                  icon: Icons.info_outline,
-                  tooltip: s.about,
-                  onTap: () => showAboutDialog(
-                    context: context,
-                    applicationName: 'Garad AI',
-                    applicationVersion: '${s.version} ${app.appVersion}',
-                    applicationLegalese: 'Powered by Arkaan AI Center.',
-                  ),
-                ),
+                // Keeps the title centred (same width as the ✕ button).
+                const SizedBox(width: 40),
               ],
             ),
             const SizedBox(height: 20),
             // The signed-in account.
             _Card(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      _Avatar(name: user?.name ?? ''),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user?.name ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w500),
-                            ),
-                            Text(
-                              user?.email ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: c.muted, fontSize: 13),
-                            ),
-                          ],
+                InkWell(
+                  onTap: () => open(const ProfileScreen()),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        _Avatar(name: user?.fullName ?? ''),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user?.fullName ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w500),
+                              ),
+                              // The plan, like ChatGPT ("Free", "Professional"); the email is in Profile.
+                              const _PlanLabel(),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Icon(Icons.chevron_right, size: 20, color: c.faint),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -90,15 +84,17 @@ class SettingsScreen extends StatelessWidget {
             _SectionLabel(s.account),
             _Card(
               children: [
-                _Row(icon: Icons.person_outline, label: s.profile, onTap: soon),
-                _Row(icon: Icons.attach_money, label: s.billing, onTap: soon),
-                _Row(icon: Icons.notifications_none, label: s.notifications, onTap: soon),
+                _Row(icon: Icons.person_outline, label: s.profile, onTap: () => open(const ProfileScreen())),
+                _Row(icon: Icons.attach_money, label: s.billing, onTap: () => open(const BillingScreen())),
+                _Row(
+                  icon: Icons.notifications_none,
+                  label: s.notifications,
+                  onTap: () => open(const NotificationsScreen()),
+                ),
                 _Row(
                   icon: Icons.shield_outlined,
                   label: s.privacy,
-                  onTap: _privacyUrl.isEmpty
-                      ? soon
-                      : () => launchUrl(Uri.parse(_privacyUrl), mode: LaunchMode.externalApplication),
+                  onTap: () => open(PrivacyScreen(onChatsDeleted: onChatsDeleted)),
                 ),
               ],
             ),
@@ -113,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
                     onOpenScheduled();
                   },
                 ),
-                _Row(icon: Icons.graphic_eq, label: s.voice, onTap: soon),
+                _Row(icon: Icons.graphic_eq, label: s.voice, onTap: () => open(const VoiceSettingsScreen())),
               ],
             ),
             _SectionLabel(s.appearance),
@@ -154,13 +150,8 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () async {
                     final ok = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
-                        content: Text(s.logoutConfirm),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.cancel)),
-                          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(s.logout)),
-                        ],
-                      ),
+                      barrierColor: Colors.black.withValues(alpha: 0.45),
+                      builder: (_) => const _SignOutDialog(),
                     );
                     if (ok != true || !context.mounted) return;
                     final auth = context.read<AuthState>();
@@ -173,6 +164,96 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Sign out?" — clean, in the app's colours: the question, a Garad-purple Sign out and Cancel.
+class _SignOutDialog extends StatelessWidget {
+  const _SignOutDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Palette.of(context);
+    final s = chatStrings;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Dialog(
+      backgroundColor: dark ? c.surfaceStrong : Colors.white,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              s.logoutConfirm,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: c.brand,
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(s.logout, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context, false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.text,
+                  side: BorderSide(color: c.line),
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(s.cancel, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w500)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Free" or the plan's name under the account's name (shown at once from the last check, then refreshed).
+class _PlanLabel extends StatefulWidget {
+  const _PlanLabel();
+
+  @override
+  State<_PlanLabel> createState() => _PlanLabelState();
+}
+
+class _PlanLabelState extends State<_PlanLabel> {
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthState>();
+    if (auth.user?.guest ?? true) return;
+    auth.api.billing().then((_) {
+      if (mounted) setState(() {});
+    }, onError: (Object _) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = context.read<AuthState>().api.cachedBilling;
+    final plan = status == null ? '' : (status.planName ?? (chatStrings.isSomali ? 'Bilaash' : 'Free'));
+    return Text(
+      plan,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: Palette.of(context).muted, fontSize: 13),
     );
   }
 }

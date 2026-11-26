@@ -6,23 +6,55 @@ import 'dart:typed_data';
 import '../widgets/reminder_card.dart';
 
 class GaradUser {
-  const GaradUser({required this.id, required this.name, required this.email, this.guest = false});
+  const GaradUser({
+    required this.id,
+    required this.name,
+    required this.email,
+    this.surname = '',
+    this.phone = '',
+    this.google = false,
+    this.createdAt,
+    this.guest = false,
+  });
 
   factory GaradUser.fromJson(Map<String, dynamic> json) => GaradUser(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
+    surname: json['surname'] as String? ?? '',
     email: json['email'] as String? ?? '',
+    phone: json['phone'] as String? ?? '',
+    google: json['google'] == true,
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
     guest: json['guest'] == true,
   );
 
   final int id;
+
+  /// First name (the website keeps name and surname apart; the app shows them as one Full name).
   final String name;
+  final String surname;
   final String email;
+  final String phone;
+
+  /// Made with "Continue with Google": may set a password without knowing the current one.
+  final bool google;
+  final DateTime? createdAt;
 
   /// Chatting without an account (ChatGPT style): limited messages a day, no files or images.
   final bool guest;
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'email': email, 'guest': guest};
+  String get fullName => [name, surname].where((s) => s.trim().isNotEmpty).join(' ');
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'surname': surname,
+    'email': email,
+    'phone': phone,
+    'google': google,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+    'guest': guest,
+  };
 }
 
 /// An AI engine the website admin has set up ("anthropic", "openai", "gemini"; "demo" locally).
@@ -307,7 +339,8 @@ class ChatMessage {
 
   /// The text to show in the user's bubble ('' when they only sent a picture or file).
   String get shownText =>
-      (localImages.isNotEmpty || imageIds.isNotEmpty || fileNames.isNotEmpty) && _defaultQuestions.contains(content.trim())
+      (localImages.isNotEmpty || imageIds.isNotEmpty || fileNames.isNotEmpty) &&
+          _defaultQuestions.contains(content.trim())
       ? ''
       : content;
 

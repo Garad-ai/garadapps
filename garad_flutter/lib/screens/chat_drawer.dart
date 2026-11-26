@@ -21,7 +21,11 @@ class ChatDrawer extends StatefulWidget {
     required this.onOpenScheduled,
     required this.onOpenLibrary,
     required this.onOpenArtifacts,
+    this.onChatsDeleted,
   });
+
+  /// Settings → Privacy → Delete all chats happened: start a new chat.
+  final VoidCallback? onChatsDeleted;
 
   /// Opens the Library (images created in chats).
   final VoidCallback onOpenLibrary;
@@ -198,7 +202,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
     navigator.push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => SettingsScreen(onOpenScheduled: widget.onOpenScheduled),
+        builder: (_) => SettingsScreen(onOpenScheduled: widget.onOpenScheduled, onChatsDeleted: widget.onChatsDeleted),
       ),
     );
   }
@@ -222,12 +226,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
               child: Row(
                 children: [
                   // The Garad logo with its name, instead of plain text.
-                  Image.asset(
-                    'assets/images/wordmark.png',
-                    height: 30,
-                    fit: BoxFit.contain,
-                    semanticLabel: 'Garad AI',
-                  ),
+                  Image.asset('assets/images/wordmark.png', height: 30, fit: BoxFit.contain, semanticLabel: 'Garad AI'),
                   const Spacer(),
                   Tooltip(
                     message: chatStrings.searchChats,

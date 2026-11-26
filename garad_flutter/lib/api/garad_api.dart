@@ -6,25 +6,28 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:http/http.dart' as http;
 
 import '../chat_strings.dart';
+import 'billing.dart';
 import 'http_client.dart';
 import 'models.dart';
 
 /// The Garad website's mobile API (routes/api.php "mobile" group in the website code): the app runs on
 /// the website's own backend — same accounts, Chat Pro engine, models, credits, memory, tools, tasks.
-/// Override at build time, e.g. for the live site or a phone on this PC's network:
+/// The phone app uses the live site (garad.ai) unless told otherwise. To test against the local XAMPP
+/// copy of the website instead (its own database and accounts):
 ///
-///   flutter run --dart-define=API_URL=https://garad.ai/api/mobile
-///   flutter run --dart-define=API_URL=http://192.168.1.20/garad.ai/public/api/mobile
+///   flutter run --dart-define=API_URL=http://10.0.2.2/garad.ai/public/api/mobile        (Android emulator)
+///   flutter run --dart-define=API_URL=http://192.168.1.20/garad.ai/public/api/mobile    (phone on this PC's Wi-Fi)
 ///
-/// Defaults (local XAMPP copy of the website): the Android emulator reaches this PC as 10.0.2.2.
+/// The web test build is served from the local copy, so it keeps using it (the live site does not
+/// accept calls from other web addresses).
 const String _apiUrlSetting = String.fromEnvironment('API_URL');
+
+const String liveApiUrl = 'https://garad.ai/api/mobile';
 
 String get apiBaseUrl {
   if (_apiUrlSetting.isNotEmpty) return _apiUrlSetting.replaceAll(RegExp(r'/+$'), '');
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    return 'http://10.0.2.2/garad.ai/public/api/mobile';
-  }
-  return 'http://localhost/garad.ai/public/api/mobile';
+  if (kIsWeb) return 'http://localhost/garad.ai/public/api/mobile';
+  return liveApiUrl;
 }
 
 /// A failed API call. [message] is ready to show to the user.
@@ -63,6 +66,7 @@ class GaradApi {
 
   // ---- Auth ----
 
+  /// Sign in with email and password (the same accounts and passwords as garad.ai).
   Future<({String token, GaradUser user})> login(String email, String password) async {
     final data = await _send(
       'POST',
@@ -72,11 +76,37 @@ class GaradApi {
     return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
 
-  /// Emails a link to reset the password (the reset itself happens on the website).
-  /// Returns the server's message, which is the same whether or not the email has an account.
+  /// Sign up: one "Full name" (the server splits it into the website's first name and surname),
+  /// email and password.
+  Future<({String token, GaradUser user})> register({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    final data = await _send(
+      'POST',
+      '/auth/register',
+      body: {'full_name': fullName, 'email': email, 'password': password, 'device_name': _deviceName},
+    ) as Map<String, dynamic>;
+    return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
+  /// "Forgot password?": emails the website's link to set a new password. Returns the server's message,
+  /// which is the same whether or not the email has an account.
   Future<String> forgotPassword(String email) async {
     final data = await _send('POST', '/auth/forgot-password', body: {'email': email}) as Map<String, dynamic>;
     return data['message'] as String? ?? '';
+  }
+
+  /// The reset link from that email opened the app: saves the new password (the link works once and
+  /// for an hour) and signs this phone in. Other phones signed in to the account are signed out.
+  Future<({String token, GaradUser user})> resetPassword({required String code, required String password}) async {
+    final data = await _send(
+      'POST',
+      '/auth/reset-password',
+      body: {'code': code, 'password': password, 'password_confirmation': password, 'device_name': _deviceName},
+    ) as Map<String, dynamic>;
+    return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
 
   /// Chat without an account: this phone's guest login (the server limits messages per day).
@@ -85,21 +115,6 @@ class GaradApi {
       'POST',
       '/auth/guest',
       body: {'device_id': deviceId, 'device_name': _deviceName},
-    ) as Map<String, dynamic>;
-    return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
-  }
-
-  /// One "Full name" — the server splits it into the website's first name and surname.
-  Future<({String token, GaradUser user})> register({
-    required String fullName,
-    required String phone,
-    required String email,
-    required String password,
-  }) async {
-    final data = await _send(
-      'POST',
-      '/auth/register',
-      body: {'full_name': fullName, 'phone': phone, 'email': email, 'password': password, 'device_name': _deviceName},
     ) as Map<String, dynamic>;
     return (token: data['token'] as String, user: GaradUser.fromJson(data['user'] as Map<String, dynamic>));
   }
@@ -135,6 +150,47 @@ class GaradApi {
     return GaradUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
+  // ---- Settings → Profile and Data controls (the website's own rules) ----
+
+  /// New name (one Full name box, like sign-up) and phone ("" removes it).
+  Future<GaradUser> updateProfile({required String fullName, required String phone}) async {
+    final data = await _send('PATCH', '/me', body: {'full_name': fullName, 'phone': phone}) as Map<String, dynamic>;
+    return GaradUser.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  /// [current] may be empty for an account made with Google (it has no password anyone knows).
+  Future<String> changePassword({required String current, required String password, String? googleIdToken}) async {
+    final data = await _send(
+      'POST',
+      '/me/password',
+      body: {
+        if (current.isNotEmpty) 'current_password': current,
+        'google_id_token': ?googleIdToken,
+        'password': password,
+        'password_confirmation': password,
+      },
+    ) as Map<String, dynamic>;
+    return data['message'] as String? ?? '';
+  }
+
+  /// The website's account deletion request (the admin reviews it). Confirmed with the password, or
+  /// for a Google account with a fresh Google sign-in ([googleIdToken]).
+  Future<String> requestAccountDeletion({String? password, String? googleIdToken}) async {
+    final data = await _send(
+      'POST',
+      '/me/delete-request',
+      body: {'password': ?password, 'google_id_token': ?googleIdToken},
+    ) as Map<String, dynamic>;
+    return data['message'] as String? ?? '';
+  }
+
+  /// Deletes every chat in the side menu (Data controls → Delete all chats).
+  Future<void> deleteAllConversations() async {
+    await _send('DELETE', '/conversations');
+    cachedChats = null;
+    cachedConversations.clear();
+  }
+
   // ---- Models and chats ----
 
   // ---- Last results, kept in memory so screens open instantly and refresh behind the scenes ----
@@ -154,6 +210,7 @@ class GaradApi {
   /// Forgets everything (sign-out or another account).
   void clearCache() {
     cachedTasks = null;
+    cachedBilling = null;
     cachedModels = null;
     cachedChats = null;
     cachedConversations.clear();
@@ -247,6 +304,37 @@ class GaradApi {
     } on ApiException {
       return null;
     }
+  }
+
+  // ---- Billing: the website's plans and EVC Plus checkout ----
+
+  Future<List<GaradPlan>> plans() async {
+    final data = await _send('GET', '/plans') as Map<String, dynamic>;
+    return [for (final p in data['data'] as List? ?? const []) GaradPlan.fromJson(p as Map<String, dynamic>)];
+  }
+
+  Future<List<PaymentMethod>> paymentMethods() async {
+    final data = await _send('GET', '/payments/methods') as Map<String, dynamic>;
+    return [for (final m in data['data'] as List? ?? const []) PaymentMethod.fromJson(m as Map<String, dynamic>)];
+  }
+
+  Future<BillingStatus> billing() async =>
+      cachedBilling = BillingStatus.fromJson(await _send('GET', '/billing') as Map<String, dynamic>);
+
+  /// The last plan seen (Settings shows "Free" / "Professional" under the name at once).
+  BillingStatus? cachedBilling;
+
+  /// Pays for [planId] with EVC Plus: the phone gets a request to approve with the EVC PIN, and the
+  /// answer comes once it is approved (or refused). Returns the server's message ("… plan activated.").
+  Future<String> checkout({required String planId, required String method, required String phone, int? seats}) async {
+    final data = await _send(
+      'POST',
+      '/payments/checkout',
+      body: {'planId': planId, 'method': method, 'phone': phone, 'seats': ?seats},
+      // The person approves the payment on their phone first.
+      timeout: const Duration(minutes: 3),
+    ) as Map<String, dynamic>;
+    return data['message'] as String? ?? '';
   }
 
   Future<List<AiVoice>> voices() async {

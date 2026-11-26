@@ -22,6 +22,7 @@ import '../api/models.dart';
 import '../app_state.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
+import '../notifications.dart';
 import '../paste_image.dart';
 import '../theme.dart';
 import '../widgets/model_picker.dart';
@@ -34,7 +35,8 @@ import '../widgets/answer_view.dart';
 import 'artifacts_screen.dart';
 import 'camera_capture_screen.dart';
 import 'library_screen.dart';
-import 'login_screen.dart';
+import 'auth_sheet.dart';
+import 'billing_screen.dart';
 import 'scheduled_screen.dart';
 import 'voice_mode_screen.dart';
 import 'welcome_screen.dart';
@@ -146,7 +148,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Sets the model list (and a default model). No setState: callers wrap it when needed.
   void _useModels(List<ChatModelInfo> models) {
     _models = models;
-    if (_modelId == null || !models.any((m) => m.id == _modelId)) {
+    // Also when the chosen model is no longer in the plan (or out of credits): never keep a locked one.
+    if (_modelId == null || !models.any((m) => m.id == _modelId && m.usable)) {
       // Claude Sonnet first (Garad's everyday model), then the website's default.
       _modelId =
           (models.where((m) => m.usable && m.id.startsWith('claude-sonnet')).firstOrNull ??
@@ -472,10 +475,13 @@ class _ChatScreenState extends State<ChatScreen> {
       _aiVoices = const [];
     }
     if (!mounted) return;
-    if (!_aiVoices.any((v) => v.id == _aiVoiceId)) {
-      final saved = await _loadVoiceChoice();
-      _aiVoiceId = (_aiVoices.where((v) => v.id == saved).firstOrNull ?? _aiVoices.firstOrNull)?.id;
-    }
+    // The saved choice wins (Settings → Voice may have changed it since the last call).
+    final saved = await _loadVoiceChoice();
+    _aiVoiceId =
+        (_aiVoices.where((v) => v.id == saved).firstOrNull ??
+                _aiVoices.where((v) => v.id == _aiVoiceId).firstOrNull ??
+                _aiVoices.firstOrNull)
+            ?.id;
     if (!mounted) return;
     // Where Garad points on the live camera, for the call screen to circle.
     final points = StreamController<CallPoint>.broadcast();
@@ -557,7 +563,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (m.isError) continue;
       final words = (m.role == 'user' ? m.content : m.displayText).trim();
       if (words.isEmpty) continue;
-      recent.insert(0, (role: m.role == 'user' ? 'user' : 'assistant', text: words.length > 1500 ? words.substring(0, 1500) : words));
+      recent.insert(0, (
+        role: m.role == 'user' ? 'user' : 'assistant',
+        text: words.length > 1500 ? words.substring(0, 1500) : words,
+      ));
       if (recent.length == 8) break;
     }
     return recent;
@@ -688,6 +697,10 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
     // No scrolling here: like ChatGPT the screen stays still while the answer is written.
+    // Settings → Notifications: tell the user if they left the app while Garad was writing.
+    if (event is ReplyDone) {
+      unawaited(GaradNotifications.answerReady(chatTitle: _title, answer: event.message.content));
+    }
   }
 
   // ---- Answer actions (copy · 👍 · 👎 · read aloud · regenerate · share · ⋯) ----
@@ -966,10 +979,24 @@ class _ChatScreenState extends State<ChatScreen> {
   // ---- Helpers ----
 
   /// The model pill in the message bar: Claude-style "Select model" (Claude models, then "More models").
+  /// Like the website, a model outside the user's plan is not selected: it opens the plans
+  /// (Upgrade), and the chat keeps its model. One with no credits left says so.
   Future<void> _modelMenu() async {
     if (_models.isEmpty) return;
     final picked = await showModelPicker(context, models: _models, selectedId: _modelId);
-    if (picked != null && mounted) setState(() => _modelId = picked);
+    if (picked == null || !mounted) return;
+    final model = _models.where((m) => m.id == picked).firstOrNull;
+    if (model != null && model.locked) {
+      await Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const BillingScreen()));
+      // After an upgrade the plan's models are open: fetch the list again.
+      if (mounted) unawaited(_loadModels());
+      return;
+    }
+    if (model != null && !model.available) {
+      _snack(chatStrings.noCreditsForModel);
+      return;
+    }
+    setState(() => _modelId = picked);
   }
 
   /// ChatGPT-style editing of an image in the chat: the Edit screen (paint the area, describe the
@@ -1310,6 +1337,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onOpenScheduled: () => _openScheduled(),
         onOpenLibrary: _openLibrary,
         onOpenArtifacts: _openArtifacts,
+        onChatsDeleted: () => _openConversation(null),
       ),
       appBar: AppBar(
         backgroundColor: c.background,
@@ -1324,9 +1352,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: const EdgeInsets.only(left: 12),
                 child: Center(
                   child: FilledButton(
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen())),
+                    onPressed: () => showAuthSheet(context),
                     style: FilledButton.styleFrom(
                       backgroundColor: c.text,
                       foregroundColor: c.background,

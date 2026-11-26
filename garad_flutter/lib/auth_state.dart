@@ -78,22 +78,23 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// [remember] false keeps the login only until the app is closed.
-  Future<void> login(String email, String password, {bool remember = true}) async {
-    final result = await api.login(email.trim(), password);
-    await _save(result.token, result.user, remember: remember);
+  /// Sign in with email and password, like garad.ai.
+  Future<void> login(String email, String password) async {
+    final result = await api.login(email.trim().toLowerCase(), password);
+    await _save(result.token, result.user);
   }
 
-  Future<void> register({
-    required String fullName,
-    required String phone,
-    required String email,
-    required String password,
-  }) async {
+  /// The password reset link opened the app: the new password is saved and this phone is signed in.
+  Future<void> resetPassword({required String code, required String password}) async {
+    final result = await api.resetPassword(code: code, password: password);
+    await _save(result.token, result.user);
+  }
+
+  /// Sign up: full name, email and password, like garad.ai (one Full name box).
+  Future<void> register({required String fullName, required String email, required String password}) async {
     final result = await api.register(
       fullName: fullName.trim().replaceAll(RegExp(r'\s+'), ' '),
-      phone: phone.trim(),
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password: password,
     );
     await _save(result.token, result.user);
@@ -117,6 +118,33 @@ class AuthState extends ChangeNotifier {
     final result = await api.googleLogin(idToken);
     await _save(result.token, result.user);
     return true;
+  }
+
+  /// A fresh Google sign-in that proves the account's owner is here (Settings: set a password or
+  /// delete an account made with Google). The ID token, or null if the user closed the account
+  /// picker; throws [ApiException] with a message to show otherwise.
+  Future<String?> confirmWithGoogle() async {
+    if (!GoogleLogin.supported) throw ApiException(GoogleLogin.text.notAvailable);
+    final clientId = await api.googleClientId();
+    if (clientId == null) throw ApiException(GoogleLogin.text.notAvailable);
+    try {
+      return await GoogleLogin.idToken(clientId);
+    } on GoogleLoginFailed catch (e) {
+      throw ApiException(e.message);
+    }
+  }
+
+  /// Settings → Profile: saves the new name and phone on the server, then here.
+  Future<void> updateProfile({required String fullName, required String phone}) async {
+    final updated = await api.updateProfile(
+      fullName: fullName.trim().replaceAll(RegExp(r'\s+'), ' '),
+      phone: phone.trim(),
+    );
+    user = updated;
+    try {
+      await _storage.write(key: _userKey, value: jsonEncode(updated.toJson()));
+    } catch (_) {}
+    notifyListeners();
   }
 
   Future<void> logout() async {

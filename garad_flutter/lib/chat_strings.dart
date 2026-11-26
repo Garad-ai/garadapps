@@ -314,6 +314,9 @@ class ChatStrings {
   String get back => isSomali ? 'Dib' : 'Back';
   String get upgrade => isSomali ? 'Kor u qaad' : 'Upgrade';
   String get noCredits => isSomali ? 'Kiridit ma jiro' : 'No credits';
+  String get noCreditsForModel => isSomali
+      ? 'Moodeelkan kiridit kuuguma harin. Dooro moodeel kale ama kor u qaad qorshahaaga.'
+      : 'You have no credits left for this model. Choose another model or upgrade your plan.';
   String get tagFable => isSomali ? 'Hawlaha ugu adag' : 'For your toughest challenges';
   String get tagOpus => isSomali ? 'Shaqo adag iyo hawl maalmeed' : 'For complex work and everyday tasks';
   String get tagSonnet => isSomali ? 'Ugu waxtarka badan hawlaha fudud' : 'Most efficient for simpler tasks';

@@ -62,6 +62,20 @@
                 <data
                     android:scheme="garadai"/>
             </intent-filter>
+            <!-- The password reset link in the email opens the app (Android App Link), checked against
+                 https://garad.ai/.well-known/assetlinks.json. Every other garad.ai link stays in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action
+                    android:name="android.intent.action.VIEW"/>
+                <category
+                    android:name="android.intent.category.DEFAULT"/>
+                <category
+                    android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="garad.ai"
+                    android:pathPrefix="/forgot-password/retrieve/"/>
+            </intent-filter>
         </activity>
         <meta-data
             android:name="flutterEmbedding"

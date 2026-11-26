@@ -8,7 +8,7 @@ import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../widgets/auth_background.dart';
 import '../widgets/google_logo.dart';
-import 'login_screen.dart';
+import 'auth_sheet.dart';
 
 String _t(String so, String en) => chatStrings.isSomali ? so : en;
 
@@ -264,9 +264,10 @@ class _LoginChoicesState extends State<LoginChoices> {
   }
 
   void _email() {
+    // ChatGPT's "Log in or sign up" sheet (email + code), over this screen.
     final navigator = Navigator.of(context);
     _closeSheet();
-    navigator.push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+    showAuthSheet(navigator.context);
   }
 
   @override

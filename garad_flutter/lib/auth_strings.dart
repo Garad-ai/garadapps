@@ -1,108 +1,117 @@
-import 'dart:ui' show PlatformDispatcher;
+import 'chat_strings.dart';
 
-/// Text for the Sign in / Sign up page, in Somali and English (Somali unless the phone is English).
+/// Text for the Sign in / Sign up card (email and password, like garad.ai), in Somali and English —
+/// the same language choice as the rest of the app.
 class AuthStrings {
   const AuthStrings._({
     required this.signIn,
     required this.signUp,
+    required this.subtitle,
     required this.fullName,
-    required this.fullNameHint,
-    required this.phone,
-    required this.phoneHint,
     required this.email,
-    required this.emailHint,
     required this.password,
-    required this.passwordHint,
-    required this.rememberMe,
-    required this.forgotPassword,
+    required this.or,
+    required this.google,
+    required this.apple,
     required this.noAccount,
     required this.haveAccount,
-    required this.dataSafe,
-    required this.agreePrefix,
-    required this.terms,
-    required this.readOur,
-    required this.privacy,
-    required this.required,
+    required this.forgotPassword,
+    required this.forgotTitle,
+    required this.forgotSubtitle,
+    required this.sendLink,
+    required this.sendAgain,
+    required this.linkSent,
+    required this.backToSignIn,
+    required this.back,
     required this.invalidEmail,
-    required this.invalidPhone,
+    required this.required,
     required this.passwordShort,
+    required this.showPassword,
+    required this.hidePassword,
+    required this.comingSoon,
   });
 
   final String signIn;
   final String signUp;
+  final String subtitle;
   final String fullName;
-  final String fullNameHint;
-  final String phone;
-  final String phoneHint;
   final String email;
-  final String emailHint;
   final String password;
-  final String passwordHint;
-  final String rememberMe;
-  final String forgotPassword;
+  final String or;
+  final String google;
+  final String apple;
   final String noAccount;
   final String haveAccount;
-  final String dataSafe;
-  final String agreePrefix;
-  final String terms;
-  final String readOur;
-  final String privacy;
-  final String required;
+  final String forgotPassword;
+  final String forgotTitle;
+  final String forgotSubtitle;
+  final String sendLink;
+  final String sendAgain;
+  final String linkSent;
+  final String backToSignIn;
+  final String back;
   final String invalidEmail;
-  final String invalidPhone;
+  final String required;
   final String passwordShort;
+  final String showPassword;
+  final String hidePassword;
+  final String comingSoon;
 }
 
 const _so = AuthStrings._(
   signIn: 'Gal',
   signUp: 'Is diiwaangeli',
+  subtitle: 'Waxaad heli doontaa jawaabo caqli badan, waxaadna soo diri kartaa faylal, sawirro iyo wax kale.',
   fullName: 'Magaca oo buuxa',
-  fullNameHint: 'Magacaaga oo buuxa',
-  phone: 'Taleefanka',
-  phoneHint: 'Lambarka taleefankaaga',
   email: 'Iimaylka',
-  emailHint: 'iimaylkaaga@email.com',
   password: 'Furaha sirta ah',
-  passwordHint: 'Furahaaga sirta ah',
-  rememberMe: 'I xasuuso',
-  forgotPassword: 'Furaha ma ilowday?',
+  or: 'AMA',
+  google: 'Ku sii wad Google',
+  apple: 'Ku sii wad Apple',
   noAccount: 'Akoon ma lihid?',
   haveAccount: 'Akoon ma leedahay?',
-  dataSafe: 'Xogtaadu waa ammaan, waana qarsoodi',
-  agreePrefix: 'Markaad sii wadato, waxaad oggolaatay',
-  terms: 'Shuruudaha isticmaalka',
-  readOur: 'Akhri',
-  privacy: 'Siyaasadda asturnaanta',
-  required: 'Waa loo baahan yahay',
+  forgotPassword: 'Furaha ma ilowday?',
+  forgotTitle: 'Furaha ma ilowday',
+  forgotSubtitle: 'Geli iimaylkaaga. Waxaan kuu soo diraynaa link aad ku dooranayso furaha cusub.',
+  sendLink: 'Dir link-ga',
+  sendAgain: 'Mar kale dir',
+  linkSent: 'Link-ga waa la diray. Eeg iimaylkaaga, iyo Spam-ka sidoo kale.',
+  backToSignIn: 'Ku noqo Gal',
+  back: 'Dib u noqo',
   invalidEmail: 'Iimayl sax ah geli',
-  invalidPhone: 'Lambar taleefan oo sax ah geli',
+  required: 'Waa loo baahan yahay',
   passwordShort: 'Ugu yaraan 8 xaraf',
+  showPassword: 'Tus furaha',
+  hidePassword: 'Qari furaha',
+  comingSoon: 'Dhawaan ayuu imanayaa.',
 );
 
 const _en = AuthStrings._(
   signIn: 'Sign in',
   signUp: 'Sign up',
+  subtitle: "You'll get smarter responses and can upload files, images and more.",
   fullName: 'Full name',
-  fullNameHint: 'Your full name',
-  phone: 'Phone',
-  phoneHint: 'Your Phone Number',
-  email: 'Email Address',
-  emailHint: 'your@email.com',
+  email: 'Email',
   password: 'Password',
-  passwordHint: 'Your password',
-  rememberMe: 'Remember me',
-  forgotPassword: 'Forgot password?',
-  noAccount: "Don't have account yet?",
+  or: 'OR',
+  google: 'Continue with Google',
+  apple: 'Continue with Apple',
+  noAccount: "Don't have an account?",
   haveAccount: 'Already have an account?',
-  dataSafe: 'Your data is safe, secure, and fully private',
-  agreePrefix: 'By proceeding, you agree to our',
-  terms: 'Terms of use',
-  readOur: 'Read our',
-  privacy: 'Privacy Policy',
-  required: 'Required',
+  forgotPassword: 'Forgot password?',
+  forgotTitle: 'Forgot password',
+  forgotSubtitle: "Enter your email and we'll send you a link to choose a new password.",
+  sendLink: 'Send link',
+  sendAgain: 'Send again',
+  linkSent: 'The link is on its way. Check your inbox, and your spam folder too.',
+  backToSignIn: 'Back to Sign in',
+  back: 'Back',
   invalidEmail: 'Enter a valid email',
-  invalidPhone: 'Enter a valid phone number',
+  required: 'Required',
   passwordShort: 'At least 8 characters',
+  showPassword: 'Show password',
+  hidePassword: 'Hide password',
+  comingSoon: 'Coming soon.',
 );
 
-final AuthStrings authStrings = PlatformDispatcher.instance.locale.languageCode == 'en' ? _en : _so;
+AuthStrings get authStrings => chatStrings.isSomali ? _so : _en;

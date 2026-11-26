@@ -33,8 +33,13 @@ abstract final class GoogleLogin {
         throw e;
       });
 
+  /// Tests replace the phone's account picker with this.
+  @visibleForTesting
+  static Future<String?> Function(String serverClientId)? debugIdToken;
+
   /// The account picker; the ID token for the chosen account, or null if the user closed the picker.
   static Future<String?> idToken(String serverClientId) async {
+    if (debugIdToken != null) return debugIdToken!(serverClientId);
     try {
       await _initialize(serverClientId);
       if (!GoogleSignIn.instance.supportsAuthenticate()) throw GoogleLoginFailed(text.notAvailable);
