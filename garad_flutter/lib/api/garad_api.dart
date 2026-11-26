@@ -721,7 +721,9 @@ class GaradApi {
   /// While streaming, a trailing ":" / "::" / ":::me…" is held back until we know whether a block starts.
   static String _visibleAnswer(String raw, {bool finished = false}) {
     // Task cards are shown separately (TaskCreated), so their ```garad-task``` blocks are hidden.
-    var source = raw.replaceAll(_taskBlock, '');
+    // A reasoning model's thinking ([START_REASONING] … [END_REASONING]) is not the answer: while it streams
+    // the reply is still empty, so the app shows its working line, as garad.ai does.
+    var source = withoutReasoning(raw.replaceAll(_taskBlock, ''));
     if (!finished) {
       // An unfinished ```garad-task block: wait for the rest before showing anything after it.
       final open = source.indexOf('```garad');
@@ -735,7 +737,10 @@ class GaradApi {
       if (card >= 0 && !text.substring(card).contains('</div>')) text = text.substring(0, card);
       final marker = text.lastIndexOf('[[');
       if (marker >= 0 && !text.substring(marker).contains(']]')) text = text.substring(0, marker);
-      final partial = RegExp(r'(:{1,3}[a-zA-Z]{0,8}|`{1,3}[a-z-]{0,12}|<d?i?v?|\[)$').firstMatch(text);
+      // … and the start of a reasoning marker ("[START_REAS", "<thi") until it is whole.
+      final partial = RegExp(
+        r'(:{1,3}[a-zA-Z]{0,8}|`{1,3}[a-z-]{0,12}|<d?i?v?|<t[a-z]{0,7}|\[\s*[A-Z_]{0,16})$',
+      ).firstMatch(text);
       if (partial != null) text = text.substring(0, partial.start);
     }
     return finished ? text.trim() : text;

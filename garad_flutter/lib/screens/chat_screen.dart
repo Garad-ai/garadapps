@@ -24,6 +24,7 @@ import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../notifications.dart';
 import '../paste_image.dart';
+import '../slides_request.dart';
 import '../theme.dart';
 import '../widgets/model_picker.dart';
 import '../widgets/reminder_card.dart';
@@ -405,8 +406,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _reply = _api
         .sendMessage(
           _conversationId!,
-          content,
-          model: model ?? (images.isEmpty ? _modelId : _visionModelId),
+          // "presantion", "power point" spelled as the server knows them; the bubble shows what was typed.
+          withCorrectedFileWords(content),
+          // Slides are built on Claude: a deck asked for on DeepSeek/GPT/Gemini goes with Claude Haiku.
+          model:
+              model ??
+              (images.isEmpty
+                  ? claudeModelForSlides(content, _models, _modelId) ?? _modelId
+                  : _visionModelId),
           webSearch: _webSearch,
           images: images,
           // Only voice mode follows the answer as it streams.

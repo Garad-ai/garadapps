@@ -6,6 +6,7 @@ import '../api/models.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../theme.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/chat_menu.dart';
 import '../widgets/chat_search_sheet.dart';
 import 'settings_screen.dart';
@@ -155,7 +156,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
           await _api.updateConversation(chat.id, title: title);
           widget.onChanged(chat.id, title: title);
         case 'delete':
-          if (!await _confirmDelete()) return;
+          if (!await _confirmDelete(chat.title)) return;
           await _api.deleteConversation(chat.id);
           widget.onChanged(chat.id, deleted: true);
       }
@@ -182,18 +183,13 @@ class _ChatDrawerState extends State<ChatDrawer> {
     return (title == null || title.isEmpty || title == current) ? null : title;
   }
 
-  Future<bool> _confirmDelete() async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          content: Text(chatStrings.deleteConfirm),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(chatStrings.cancel)),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(chatStrings.delete)),
-          ],
-        ),
-      ) ??
-      false;
+  Future<bool> _confirmDelete(String title) => showConfirmDialog(
+    context,
+    title: chatStrings.deleteChatTitle,
+    message: chatStrings.deleteChatMessage(title.trim()),
+    confirmLabel: chatStrings.delete,
+    cancelLabel: chatStrings.cancel,
+  );
 
   /// The avatar at the bottom: Settings (account, appearance, log out).
   void _openSettings() {

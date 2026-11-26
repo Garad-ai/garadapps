@@ -308,6 +308,12 @@ class ChatStrings {
   String get about => isSomali ? 'Ku saabsan' : 'About';
   String get version => isSomali ? 'Nooca' : 'Version';
 
+  // Deleting a chat: the confirmation's title and what happens.
+  String get deleteChatTitle => isSomali ? 'Sheekada ma tirtirtaa?' : 'Delete chat?';
+  String deleteChatMessage(String title) => isSomali
+      ? '${title.isEmpty ? 'Sheekadan' : '“$title”'} waa laga tirtirayaa app-ka iyo garad.ai. Dib looma soo celin karo.'
+      : '${title.isEmpty ? 'This chat' : '“$title”'} will be deleted from the app and garad.ai. This can’t be undone.';
+
   // "Select model".
   String get selectModel => isSomali ? 'Dooro moodeelka' : 'Select model';
   String get moreModels => isSomali ? 'Moodeelo kale' : 'More models';

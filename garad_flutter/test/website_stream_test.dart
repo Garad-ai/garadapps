@@ -78,4 +78,31 @@ void main() {
     expect(events.whereType<ReplyFailed>().single.message, contains('not included in your current plan'));
     expect(events.whereType<ReplyDone>(), isEmpty);
   });
+
+
+  test("a reasoning model's thinking is never shown as the answer", () async {
+    const body =
+        'event: message\ndata: 40\n\n'
+        'event: data\ndata: [START_REASONING]The user asks again "Make presantion". I should call\n\n'
+        'event: data\ndata:  create_presentation.[END_REASONING]<br/><br/>\n\n'
+        'event: data\ndata: Here is your deck.\n\n'
+        'event: stop\ndata: [DONE]\n\n';
+
+    final events = await _apiReplying(body).sendMessage(18, 'hi').toList();
+    final text = events.whereType<ReplyDelta>().map((e) => e.text).join();
+
+    expect(text, isNot(contains('REASONING')), reason: 'not even the start of the marker');
+    expect(text, isNot(contains('The user asks')));
+    expect(events.whereType<ReplyDone>().single.message.content, 'Here is your deck.');
+  });
+
+  test('saved answers and other reasoning forms are cleaned too', () {
+    expect(withoutReasoning('[START_REASONING]plan[END_REASONING]<br/><br/>Answer'), 'Answer');
+    expect(withoutReasoning('<think>plan</think>\n\nAnswer'), 'Answer');
+    expect(withoutReasoning('[START_REASONING]still thinking'), '');
+    expect(withoutReasoning('cut off thinking[END_REASONING]\nAnswer'), 'Answer');
+    expect(withoutReasoning('A normal <b>answer</b> about thinking'), 'A normal <b>answer</b> about thinking');
+    final saved = ChatMessage.fromJson({'id': 1, 'role': 'assistant', 'content': '[START_REASONING]x[END_REASONING]Hi'});
+    expect(saved.content, 'Hi');
+  });
 }

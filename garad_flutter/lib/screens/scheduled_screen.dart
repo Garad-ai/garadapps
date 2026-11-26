@@ -6,6 +6,7 @@ import '../api/models.dart';
 import '../auth_state.dart';
 import '../schedule_strings.dart';
 import '../theme.dart';
+import '../widgets/confirm_dialog.dart';
 
 /// The Scheduled screen, ChatGPT-style: ‹ back · "Scheduled", Active / Paused / Completed tabs,
 /// task rows with ⋯, a Recommended list and a "New task" button.
@@ -117,17 +118,14 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
   Future<void> _delete(ScheduledTask task) async {
     final s = scheduleStrings;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Text(s.deleteConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(s.delete)),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: s.deleteConfirm,
+      message: task.title,
+      confirmLabel: s.delete,
+      cancelLabel: s.cancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await _api.deleteTask(task.id);
       await _load();

@@ -14,6 +14,7 @@ import '../auth_state.dart';
 import '../chat_strings.dart';
 import '../notifications.dart';
 import '../theme.dart';
+import '../widgets/confirm_dialog.dart';
 
 String _t(String so, String en) => chatStrings.isSomali ? so : en;
 
@@ -540,27 +541,17 @@ class PrivacyScreen extends StatelessWidget {
     final privacyUrl = _privacyUrlSetting.isNotEmpty ? _privacyUrlSetting : websitePage('/privacy-policy');
 
     Future<void> deleteAll() async {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          title: Text(_t('Tirtir dhammaan wada-hadallada?', 'Delete all chats?')),
-          content: Text(
-            _t(
-              'Dhammaan wada-hadalladaada waa laga tirtirayaa app-ka iyo garad.ai. Tan dib looma soo celin karo.',
-              'All your chats will be deleted from the app and garad.ai. This can’t be undone.',
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialog, false), child: Text(chatStrings.cancel)),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialog, true),
-              style: FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Colors.white),
-              child: Text(_t('Tirtir', 'Delete')),
-            ),
-          ],
+      final ok = await showConfirmDialog(
+        context,
+        title: _t('Tirtir dhammaan wada-hadallada?', 'Delete all chats?'),
+        message: _t(
+          'Dhammaan wada-hadalladaada waa laga tirtirayaa app-ka iyo garad.ai. Tan dib looma soo celin karo.',
+          'All your chats will be deleted from the app and garad.ai. This can’t be undone.',
         ),
+        confirmLabel: _t('Tirtir', 'Delete'),
+        cancelLabel: chatStrings.cancel,
       );
-      if (ok != true || !context.mounted) return;
+      if (!ok || !context.mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       try {
         await context.read<AuthState>().api.deleteAllConversations();

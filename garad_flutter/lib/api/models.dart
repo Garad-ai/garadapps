@@ -315,7 +315,10 @@ class ChatMessage {
     final message = ChatMessage(
       id: json['id'] as int?,
       role: json['role'] as String? ?? 'assistant',
-      content: json['content'] as String? ?? '',
+      // A reasoning model's thinking is never part of a saved answer either.
+      content: json['role'] == 'user'
+          ? json['content'] as String? ?? ''
+          : withoutReasoning(json['content'] as String? ?? ''),
       status: json['status'] as String? ?? 'ok',
       modelName: json['model_name'] as String?,
     );
@@ -576,4 +579,23 @@ String documentKind(String kind, {String extension = '', String name = ''}) {
   };
   final dot = name.lastIndexOf('.');
   return from(kind) ?? from(extension) ?? (dot >= 0 ? from(name.substring(dot + 1)) : null) ?? (kind.isEmpty ? 'document' : kind);
+}
+
+/// The answer without a reasoning model's thinking: DeepSeek and other reasoning models write it between
+/// [START_REASONING] and [END_REASONING] (or `<think>…</think>`), which garad.ai shows only in its reasoning
+/// panel (frontend/src/core/normalizeResponse.ts), never as the answer. An unfinished block (still
+/// streaming) is hidden to the end; a lone [END_REASONING] means everything before it was thinking.
+String withoutReasoning(String text) {
+  if (!text.contains('REASONING') && !text.contains('<')) return text;
+  var result = text.replaceAll(
+    RegExp(
+      r'\[\s*START_REASONING\s*\][\s\S]*?(?:\[\s*END_REASONING\s*\]|$)'
+      r'|<\s*(think|thinking|reasoning|analysis)\b[^>]*>[\s\S]*?(?:<\/\s*\1\s*>|$)',
+      caseSensitive: false,
+    ),
+    '',
+  );
+  final end = RegExp(r'\[\s*END_REASONING\s*\]', caseSensitive: false).allMatches(result).lastOrNull;
+  if (end != null) result = result.substring(end.end);
+  return result.replaceFirst(RegExp(r'^(?:\s|<br\s*/?>)+', caseSensitive: false), '');
 }
