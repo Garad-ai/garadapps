@@ -4,6 +4,9 @@ library;
 import 'dart:typed_data';
 
 import '../widgets/reminder_card.dart';
+import 'work_steps.dart';
+
+export 'work_steps.dart';
 
 class GaradUser {
   const GaradUser({
@@ -277,7 +280,7 @@ class LibraryFile {
     id: json['id'] as int,
     title: json['title'] as String? ?? '',
     name: json['name'] as String? ?? '',
-    kind: json['kind'] as String? ?? '',
+    kind: documentKind(json['kind'] as String? ?? '', name: json['name'] as String? ?? ''),
     size: json['size'] as int?,
     chatId: json['chat_id'] as int?,
     createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
@@ -320,6 +323,8 @@ class ChatMessage {
     for (final task in json['tasks'] as List? ?? const []) {
       if (task is Map<String, dynamic>) message.tasks.add(ScheduledTask.fromJson(task));
     }
+    // What Claude's document engine did for this answer ("Ran a command, created a file, shared files").
+    message.workSteps.addAll(savedWorkSteps(json['work_steps']));
     message.imageIds.addAll([for (final id in json['images'] as List? ?? const []) '$id']);
     message.fileNames.addAll([for (final name in json['files'] as List? ?? const []) '$name']);
     return message;
@@ -361,6 +366,12 @@ class ChatMessage {
 
   /// What the AI is doing right now while answering (creating an image, a PDF…); null when just writing.
   ToolStatus? activity;
+
+  /// The steps Claude's document engine took for this answer (building slides, a Word file…).
+  final List<WorkStep> workSteps = [];
+
+  /// When this reply started streaming (the steps' clock: "Running a command 11s").
+  DateTime? startedAt;
 
   /// 👍 "up" / 👎 "down" from the user; kept in the app only (the website does not store it either).
   String? feedback;
@@ -418,6 +429,14 @@ class ReplyDone extends ChatEvent {
 /// The website's engine restarted the answer (after a tool call): clear what was shown.
 class ReplyReset extends ChatEvent {
   const ReplyReset();
+}
+
+/// One step of Claude's document engine while it builds a file ("event: work_step"): added, or the
+/// step with the same id updated with what [raw] carries.
+class WorkStepUpdate extends ChatEvent {
+  const WorkStepUpdate(this.step, this.raw);
+  final WorkStep step;
+  final Map<String, dynamic> raw;
 }
 
 /// The AI created a scheduled task while answering ("remind me in 1 minute…").
@@ -542,4 +561,19 @@ class CallPoint extends CallEvent {
   final double x;
   final double y;
   final String label;
+}
+
+/// One of the app's kinds (pdf · document · spreadsheet · presentation) from what the server sent: a
+/// file card's data-kind is sometimes the extension ("pptx" for decks from Claude's document engine),
+/// and the file name settles it when the kind says nothing.
+String documentKind(String kind, {String extension = '', String name = ''}) {
+  String? from(String value) => switch (value.toLowerCase().trim().replaceFirst('.', '')) {
+    'pdf' => 'pdf',
+    'presentation' || 'pptx' || 'ppt' || 'slides' || 'powerpoint' => 'presentation',
+    'spreadsheet' || 'xlsx' || 'xls' || 'csv' || 'excel' => 'spreadsheet',
+    'document' || 'docx' || 'doc' || 'word' => 'document',
+    _ => null,
+  };
+  final dot = name.lastIndexOf('.');
+  return from(kind) ?? from(extension) ?? (dot >= 0 ? from(name.substring(dot + 1)) : null) ?? (kind.isEmpty ? 'document' : kind);
 }

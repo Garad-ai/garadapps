@@ -634,6 +634,7 @@ class GaradApi {
     //   message → the saved message id · data → a piece of the answer (raw text, "<br/>" = newline)
     //   title → {"chat_id","title"} · error → {"message","code"} · clear_content → start the answer over
     //   tool_status → {"tool","state","label"} (creating an image, a PDF…) · stop → "[DONE]".
+    //   work_step → {"step": {"id","kind","state","file","detail","title"}} (Claude building a file).
     //   Other events (suggestions, artifact…) are not used: files arrive as cards inside the answer.
     var event = 'data';
     var raw = ''; // the whole answer so far, as sent
@@ -684,6 +685,12 @@ class GaradApi {
               label: json['label'] as String? ?? '',
             );
           }
+        case 'work_step':
+          // Claude's document engine building a file: one step, added or updated.
+          final json = _tryJson(data);
+          final raw = json is Map ? json['step'] : null;
+          final step = WorkStep.fromJson(raw);
+          if (step != null && raw is Map<String, dynamic>) yield WorkStepUpdate(step, raw);
         case 'title':
           final json = _tryJson(data);
           final title = json is Map ? json['title'] : null;

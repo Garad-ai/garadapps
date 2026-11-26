@@ -16,6 +16,7 @@ import '../screens/image_edit_screen.dart';
 import '../screens/library_screen.dart';
 import '../theme.dart';
 import 'code_block.dart';
+import 'work_steps_view.dart';
 
 /// One piece of an answer: text, a file the AI created, a generated image, or a question with options.
 sealed class AnswerPart {
@@ -111,7 +112,12 @@ List<AnswerPart> parseAnswer(String content) {
       String attr(String name) => RegExp('data-$name="([^"]*)"').firstMatch(attrs)?.group(1) ?? '';
       final name = RegExp(r'<span>([\s\S]*?)</span>').firstMatch(body)?.group(1) ?? 'file';
       parts.add(
-        FilePart(name: _unescape(name), kind: attr('kind'), url: _unescape(url), size: int.tryParse(attr('size'))),
+        FilePart(
+          name: _unescape(name),
+          kind: documentKind(attr('kind'), extension: attr('extension'), name: _unescape(name)),
+          url: _unescape(url),
+          size: int.tryParse(attr('size')),
+        ),
       );
     } else if (m.group(3) != null) {
       try {
@@ -224,9 +230,14 @@ class AnswerView extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = parseAnswer(message.content);
     final activity = message.activity;
+    final steps = message.workSteps;
+    // Claude building a file: the website's step line ("Running a command 11s ›") until the answer's
+    // text starts, then its summary ("Ran a command, created a file, shared files ›").
+    final stepsWorking = streaming && (parts.isEmpty || steps.any((s) => s.running));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (steps.isNotEmpty) WorkStepsView(steps: steps, working: stepsWorking, since: message.startedAt),
         for (final part in parts)
           switch (part) {
             TextPart(:final markdown) => MarkdownBody(
@@ -247,7 +258,10 @@ class AnswerView extends StatelessWidget {
             ChoicesPart() => _ChoicesCard(choices: part, onChoose: onChoose, chosen: chosen),
             AppPart() => _AppCard(app: part, version: appVersion, onChange: onAppChange),
           },
-        if (streaming && (activity?.working ?? false))
+        // The step line already says what is happening.
+        if (steps.isNotEmpty)
+          const SizedBox.shrink()
+        else if (streaming && (activity?.working ?? false))
           _Working(status: activity!)
         else if (streaming && parts.isEmpty)
           _Working(

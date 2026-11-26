@@ -375,7 +375,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final userBubble = ChatMessage(role: 'user', content: content)
       ..localImages.addAll(photos.map((a) => a.bytes))
       ..fileNames.addAll(documents.map((a) => a.name!));
-    final replyBubble = ChatMessage(role: 'assistant', content: '');
+    final replyBubble = ChatMessage(role: 'assistant', content: '')..startedAt = DateTime.now();
     setState(() {
       _sending = true;
       _input.clear();
@@ -677,6 +677,8 @@ class _ChatScreenState extends State<ChatScreen> {
           replyBubble.content += text;
         case ToolStatus():
           replyBubble.activity = event;
+        case WorkStepUpdate(:final step, :final raw):
+          mergeWorkStep(replyBubble.workSteps, step, raw, DateTime.now());
         case ReplyReset():
           replyBubble.content = '';
         case ReplyDone(:final message):
@@ -734,8 +736,10 @@ class _ChatScreenState extends State<ChatScreen> {
       _speaking = null;
       bubble
         ..content = ''
-        ..feedback = null;
+        ..feedback = null
+        ..startedAt = DateTime.now();
       bubble.tasks.clear();
+      bubble.workSteps.clear();
     });
     _reply = _api
         .regenerate(chatId, messageId, model: _modelId)
