@@ -30,6 +30,8 @@ class MainActivity : FlutterActivity() {
                     "quiet" -> { quiet(); result.success(null) }
                     "restore" -> { restore(); result.success(null) }
                     "earphones" -> result.success(earphonesConnected())
+                    "liveStart" -> { liveStart(); result.success(null) }
+                    "liveEnd" -> { liveEnd(); result.success(null) }
                     else -> result.notImplemented()
                 }
             }
@@ -78,6 +80,33 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) types.add(AudioDeviceInfo.TYPE_USB_HEADSET)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) types.add(AudioDeviceInfo.TYPE_BLE_HEADSET)
         return audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in types }
+    }
+
+    /// Garad Live (a video call in the web view): the sound back on, and Garad's voice on the loudspeaker.
+    /// The page's microphone puts the phone in call mode, which plays sound on the earpiece (the small
+    /// speaker for your ear) — inaudible with the phone held out for video. Earphones and Bluetooth keep
+    /// their own routing.
+    private fun liveStart() {
+        restore()
+        if (earphonesConnected()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audio.availableCommunicationDevices
+                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                ?.let { audio.setCommunicationDevice(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audio.isSpeakerphoneOn = true
+        }
+    }
+
+    /// The call ended: the phone chooses where sound goes again.
+    private fun liveEnd() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audio.clearCommunicationDevice()
+        } else {
+            @Suppress("DEPRECATION")
+            audio.isSpeakerphoneOn = false
+        }
     }
 
     /// Unmutes only what [quiet] muted.

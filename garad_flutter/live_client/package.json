@@ -1,0 +1,12 @@
+{
+  "name": "garad-live-client",
+  "private": true,
+  "description": "The Garad app's live video call (Gemini Live): microphone, camera frames and Garad's voice over Google's Live API. Built into assets/live/ and shown in a web view (lib/screens/live_video_screen.dart), where the browser's echo cancellation keeps Garad from hearing itself.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "8.3.5"
+  }
+}

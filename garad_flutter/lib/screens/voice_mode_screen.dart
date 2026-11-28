@@ -90,7 +90,12 @@ class VoiceModeScreen extends StatefulWidget {
     this.voiceId,
     this.onVoiceChanged,
     this.synthesize,
+    this.onLiveVideo,
   });
+
+  /// 📹 opens Garad Live (real-time video, like Gemini Live): this call pauses meanwhile and listens
+  /// again after. Null: the camera turns on in this call instead (a picture goes with each question).
+  final Future<void> Function()? onLiveVideo;
 
   /// AI voices to choose from (⋯ → Voice) and the one in use; null = the phone's own voice.
   final List<AiVoice> voices;
@@ -876,6 +881,22 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> with SingleTickerProv
 
   Future<void> _toggleCamera() async {
     final current = _camera;
+    final live = widget.onLiveVideo;
+    if (current == null && live != null) {
+      // Video is Garad Live: stop listening and speaking here, and carry on after the video call.
+      _turn++;
+      _speechQueue.clear();
+      if (_phase == _Phase.thinking || _phase == _Phase.speaking) widget.cancel();
+      // Paused, so the recognizer's late "stopped" does not start listening again behind the video
+      // (it would take the microphone from Garad Live).
+      setState(() => _phase = _Phase.paused);
+      await _stt.stop();
+      await _stopVoice();
+      CallAudio.restore();
+      await live();
+      if (mounted) await _listen();
+      return;
+    }
     if (current != null) {
       _clearPoints();
       setState(() => _camera = null);

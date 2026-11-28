@@ -3,28 +3,40 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-/// Serves the slide viewer (assets/slides, built from slides_viewer/) to the web view over
-/// http://127.0.0.1. The viewer's parser runs in a worker with WebAssembly, which a web view will not
-/// load from file:// pages. Only the viewer's own files are served, only on this phone (loopback), on
-/// a free port. The deck itself never goes through it: the page asks the app for it directly.
-class SlidesServer {
-  SlidesServer._();
+/// Serves the app's own web pages to its web views over http://127.0.0.1:
+///  * /slides/ — the slide viewer (assets/slides, built from slides_viewer/). Its parser runs in a worker
+///    with WebAssembly, which a web view will not load from file:// pages.
+///  * /live/ — the live video call (assets/live, built from live_client/). The camera and microphone
+///    need a secure page, and http://127.0.0.1 is one.
+/// Only those pages' own files are served, only on this phone (loopback), on a free port. Decks and
+/// call keys never go through it: the pages ask the app for them directly.
+class LocalPages {
+  LocalPages._();
 
-  static const _root = 'assets/slides/';
+  static const _root = 'assets/';
+  static const _folders = {'slides', 'live'};
   static HttpServer? _server;
-  static Future<Uri>? _starting;
+  static Future<int>? _starting;
 
-  /// The viewer page's address, starting the server the first time.
-  static Future<Uri> url() => _starting ??= _start().catchError((Object e) {
+  /// The slide viewer's address, starting the server the first time.
+  static Future<Uri> slides() => _page('slides');
+
+  /// The live video call's address.
+  static Future<Uri> live() => _page('live');
+
+  static Future<Uri> _page(String folder) async =>
+      Uri(scheme: 'http', host: '127.0.0.1', port: await _port(), path: '/$folder/index.html');
+
+  static Future<int> _port() => _starting ??= _start().catchError((Object e) {
     _starting = null; // try again next time
     throw e;
   });
 
-  static Future<Uri> _start() async {
+  static Future<int> _start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _server = server;
     server.listen(_handle);
-    return Uri(scheme: 'http', host: '127.0.0.1', port: server.port, path: '/index.html');
+    return server.port;
   }
 
   static Future<void> _handle(HttpRequest request) async {
@@ -35,7 +47,6 @@ class SlidesServer {
         response.statusCode = HttpStatus.notFound;
         return;
       }
-      final path = asset.substring(_root.length);
       final ByteData data;
       try {
         data = await rootBundle.load(asset);
@@ -44,7 +55,7 @@ class SlidesServer {
         return;
       }
       response.headers
-        ..contentType = contentTypeFor(path)
+        ..contentType = contentTypeFor(asset)
         ..set(HttpHeaders.cacheControlHeader, 'no-store')
         ..set('X-Content-Type-Options', 'nosniff');
       response.add(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
@@ -53,8 +64,8 @@ class SlidesServer {
     }
   }
 
-  /// The asset a request path stands for, or null: only plain names inside the viewer folder
-  /// ("/index.html", "/assets/x.js"), never "..", "%2e%2e" or any other app asset.
+  /// The asset a request path stands for, or null: only plain names inside one of the pages' folders
+  /// ("/slides/index.html", "/live/assets/x.js"), never "..", "%2e%2e" or any other app asset.
   static String? assetFor(String requestPath) {
     final String path;
     try {
@@ -63,7 +74,9 @@ class SlidesServer {
       return null;
     }
     if (path.isEmpty || path.contains(r'\')) return null;
-    if (path.split('/').any((p) => p.isEmpty || p == '..' || p == '.')) return null;
+    final parts = path.split('/');
+    if (parts.length < 2 || !_folders.contains(parts.first)) return null;
+    if (parts.any((p) => p.isEmpty || p == '..' || p == '.')) return null;
     return '$_root$path';
   }
 

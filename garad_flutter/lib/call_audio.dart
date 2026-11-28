@@ -17,6 +17,13 @@ abstract final class CallAudio {
   /// Before Garad speaks, when muted or when the call ends: the sound is back to normal.
   static Future<void> restore() => _call('restore');
 
+  /// Garad Live starts: sound on, and Garad's voice on the loudspeaker (not the earpiece the phone's
+  /// call mode would pick), unless earphones or Bluetooth are connected.
+  static Future<void> liveStart() => _call('liveStart');
+
+  /// Garad Live ended: the phone chooses where sound goes again.
+  static Future<void> liveEnd() => _call('liveEnd');
+
   /// Whether the sound goes to earphones or a headset (wired or Bluetooth): then the microphone
   /// does not hear Garad, and the call can listen while Garad talks. False elsewhere or if unknown.
   static Future<bool> earphones() async {

@@ -9,7 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../api/garad_api.dart';
 import '../auth_state.dart';
 import '../chat_strings.dart';
-import '../slides_server.dart';
+import '../local_pages.dart';
 import '../theme.dart';
 
 /// A file name as a title: "Online_Business_Presentation.pptx" → "Online Business Presentation".
@@ -22,7 +22,7 @@ String slidesTitle(String? name) => (name ?? '')
 
 /// A presentation made by Garad, as slides — the same slide view as garad.ai: one slide at a time
 /// (swipe or ‹ › to move), a Grid of all slides, and Present (full screen, landscape, tap for the next
-/// slide). The slides are drawn by the website's renderer (slides_viewer/, served by [SlidesServer]);
+/// slide). The slides are drawn by the website's renderer (slides_viewer/, served by [LocalPages]);
 /// the controls around them are the app's own. Share sends the real PowerPoint file.
 class SlidesScreen extends StatefulWidget {
   const SlidesScreen({super.key, required this.id, this.title});
@@ -66,7 +66,7 @@ class _SlidesScreenState extends State<SlidesScreen> {
   Future<void> _start() async {
     setState(() => _error = null);
     try {
-      final page = await SlidesServer.url();
+      final page = await LocalPages.slides();
       if (mounted) setState(() => _page = page);
     } catch (_) {
       if (mounted) setState(() => _error = _t('Bandhigga lama furi karo.', 'The slides could not be opened.'));

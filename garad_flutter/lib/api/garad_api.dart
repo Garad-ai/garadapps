@@ -9,6 +9,9 @@ import '../chat_strings.dart';
 import 'billing.dart';
 import 'http_client.dart';
 import 'models.dart';
+import 'toolkit.dart';
+
+export 'toolkit.dart';
 
 /// The Garad website's mobile API (routes/api.php "mobile" group in the website code): the app runs on
 /// the website's own backend — same accounts, Chat Pro engine, models, credits, memory, tools, tasks.
@@ -96,6 +99,103 @@ class GaradApi {
   Future<String> forgotPassword(String email) async {
     final data = await _send('POST', '/auth/forgot-password', body: {'email': email}) as Map<String, dynamic>;
     return data['message'] as String? ?? '';
+  }
+
+  // ---- AI Toolkit: the website's Image Generator (its own endpoints, plan locks and credits) ----
+
+  Future<List<ImageModelInfo>> imageModels() async {
+    final data = await _send('GET', '/toolkit/image-models');
+    return [
+      if (data is List)
+        for (final m in data)
+          if (m is Map<String, dynamic>) ImageModelInfo.fromJson(m),
+    ];
+  }
+
+  /// The user's generated images, newest first (24 a page).
+  Future<({List<ToolkitImage> items, int? nextPage})> toolkitImages({int page = 1}) async {
+    final data = await _send('GET', '/toolkit/images', query: {'page': '$page'}) as Map<String, dynamic>;
+    return (
+      items: [for (final i in data['data'] as List? ?? const []) ToolkitImage.fromJson(i as Map<String, dynamic>)],
+      nextPage: data['next_page'] as int?,
+    );
+  }
+
+  Future<void> deleteToolkitImage(String slug) => _send('DELETE', '/toolkit/images/$slug');
+
+  /// Makes [count] images with [model], exactly as the website's Image Generator asks for them (the
+  /// prompt with its style, lighting and mood; a reference picture for models that take one). Takes as
+  /// long as the provider does (up to a few minutes); the server charges once the images exist.
+  Future<List<ToolkitImage>> generateImages({
+    required ImageModelInfo model,
+    required String prompt,
+    int count = 1,
+    String style = '',
+    String lighting = '',
+    String mood = '',
+    Uint8List? reference,
+  }) async {
+    final text = ImageOptions.prompt(prompt, style: style, lighting: lighting, mood: mood);
+    final request = http.MultipartRequest('POST', _uri('/toolkit/images'))
+      ..headers.addAll(_headers..remove('Content-Type'))
+      ..fields.addAll({
+        'post_type': 'ai_image_generator',
+        'image_generator': model.imageGenerator,
+        'description': text,
+        model.promptField: text,
+        'image_number_of_images': '$count',
+        'size': '1024x1024',
+        'quality': 'auto',
+        'image_style': style,
+        'image_lighting': lighting,
+        'image_mood': mood,
+        'mood': mood,
+        'negative_prompt': '',
+        'fal_ai_model': ?model.falAiModel,
+        if (model.imageGenerator == 'stable_diffusion') ...{
+          'type': reference != null ? 'image-to-image' : 'text-to-image',
+          'stable_description': text,
+          'image_resolution': '1024x1024',
+        } else if (model.id.startsWith('gpt-image-'))
+          'stable_description': text,
+      });
+    if (reference != null && model.referenceMode != null) {
+      final name = imageName(reference);
+      request.files.add(
+        http.MultipartFile.fromBytes(model.referenceMode == 'image_src_array' ? 'image_src[]' : 'image_src', reference, filename: name),
+      );
+    }
+
+    final http.Response response;
+    try {
+      response = await http.Response.fromStream(await _client.send(request).timeout(const Duration(minutes: 6)));
+    } on TimeoutException {
+      throw ApiException(chatStrings.timeout);
+    } catch (_) {
+      throw ApiException(chatStrings.cannotConnect);
+    }
+    final data = _decode(response.statusCode, response.body);
+    // The website answers 200 with {status: error, message} for most failures (no credits, refused…).
+    if (data is! Map<String, dynamic> || data['status'] != 'success') {
+      final message = data is Map && data['message'] is String ? data['message'] as String : chatStrings.somethingWrong;
+      throw ApiException(message, statusCode: data is Map && data['code'] == 'tokens_used_up' ? 402 : null);
+    }
+    return [
+      for (final i in data['images'] as List? ?? const [])
+        if (i is Map<String, dynamic>) ToolkitImage.fromJson(i),
+    ].where((i) => i.url.isNotEmpty).toList();
+  }
+
+  /// Live video (Gemini Live): a one-use key for the next ~2-minute block of the call, paid for on the
+  /// server first (free daily minutes, then credits). {token, url, model, seconds, free_seconds_left, voice}.
+  /// Out of minutes: {error, code: "live_minutes_used"}; other failures: {error}.
+  Future<Map<String, dynamic>> liveToken({required bool somali, String? voice}) async {
+    try {
+      return await _send('POST', '/live/token', body: {'language': somali ? 'so' : 'en', 'voice': ?voice})
+          as Map<String, dynamic>;
+    } on ApiException catch (e) {
+      return {'error': e.message, if (e.statusCode == 402) 'code': 'live_minutes_used'};
+    }
   }
 
   /// The reset link from that email opened the app: saves the new password (the link works once and
@@ -516,10 +616,12 @@ class GaradApi {
 
   /// A new answer to the chat's latest question, replacing the old one (the server keeps the old
   /// answer if this fails). Same events as [sendMessage], without [UserMessageSaved].
-  Stream<ChatEvent> regenerate(int conversationId, int messageId, {String? model}) async* {
+  /// [prompt]: the question edited first ("Edit message", only the chat's latest question).
+  Stream<ChatEvent> regenerate(int conversationId, int messageId, {String? model, String? prompt}) async* {
     yield* _stream('/conversations/$conversationId/messages/$messageId/regenerate', {
       'model': ?model,
       'timezone': await localTimezone(),
+      'prompt': ?prompt,
     });
   }
 

@@ -35,30 +35,32 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                _RoundButton(icon: Icons.close, tooltip: s.close, onTap: () => Navigator.pop(context)),
+                _RoundButton(icon: Icons.arrow_back_rounded, tooltip: s.close, onTap: () => Navigator.pop(context)),
                 Expanded(
                   child: Text(
                     s.settings,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
-                // Keeps the title centred (same width as the ✕ button).
-                const SizedBox(width: 40),
+                // Keeps the title centred (same width as the ← button).
+                const SizedBox(width: 48),
               ],
             ),
             const SizedBox(height: 20),
             // The signed-in account.
             _Card(
+              // Free accounts: "Upgrade", in Garad purple, with its own line (none on a paid plan).
+              footer: _UpgradeRow(onTap: () => open(const BillingScreen())),
               children: [
                 InkWell(
                   onTap: () => open(const ProfileScreen()),
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
                     child: Row(
                       children: [
-                        _Avatar(name: user?.fullName ?? ''),
-                        const SizedBox(width: 12),
+                        _Avatar(name: user?.fullName ?? '', size: 44),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,21 +69,21 @@ class SettingsScreen extends StatelessWidget {
                                 user?.fullName ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w500),
+                                style: TextStyle(color: c.text, fontSize: 17.5, fontWeight: FontWeight.w600),
                               ),
                               // The plan, like ChatGPT ("Free", "Professional"); the email is in Profile.
                               const _PlanLabel(),
                             ],
                           ),
                         ),
-                        Icon(Icons.chevron_right, size: 20, color: c.faint),
+                        Icon(Icons.chevron_right, size: 22, color: c.faint),
                       ],
                     ),
                   ),
                 ),
               ],
             ),
-            _SectionLabel(s.account),
+            const SizedBox(height: 22),
             _Card(
               children: [
                 _Row(icon: Icons.person_outline, label: s.profile, onTap: () => open(const ProfileScreen())),
@@ -96,11 +98,6 @@ class SettingsScreen extends StatelessWidget {
                   label: s.privacy,
                   onTap: () => open(PrivacyScreen(onChatsDeleted: onChatsDeleted)),
                 ),
-              ],
-            ),
-            _SectionLabel(s.app),
-            _Card(
-              children: [
                 _Row(
                   icon: Icons.schedule,
                   label: s.scheduled,
@@ -139,7 +136,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             _Card(
               children: [
                 _Row(
@@ -258,6 +255,47 @@ class _PlanLabelState extends State<_PlanLabel> {
   }
 }
 
+/// "Upgrade" in Garad purple, for free accounts only (like ChatGPT's "Upgrade to Plus").
+class _UpgradeRow extends StatefulWidget {
+  const _UpgradeRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_UpgradeRow> createState() => _UpgradeRowState();
+}
+
+class _UpgradeRowState extends State<_UpgradeRow> {
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthState>();
+    if (auth.user?.guest ?? true) return;
+    auth.api.billing().then((_) {
+      if (mounted) setState(() {});
+    }, onError: (Object _) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Palette.of(context);
+    final status = context.read<AuthState>().api.cachedBilling;
+    // Unknown yet, or already on a paid plan: nothing to show.
+    if (status == null || status.planName != null) return const SizedBox.shrink();
+    return Column(
+      children: [
+        Divider(height: 1, color: c.line),
+        _Row(
+          icon: Icons.auto_awesome_outlined,
+          label: chatStrings.isSomali ? 'Kor u qaad qorshahaaga' : 'Upgrade your plan',
+          color: c.brand,
+          onTap: widget.onTap,
+        ),
+      ],
+    );
+  }
+}
+
 /// A round letter avatar (the name's first letter).
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.name, this.size = 40});
@@ -308,9 +346,12 @@ class _SectionLabel extends StatelessWidget {
 
 /// A rounded card with thin dividers between its rows.
 class _Card extends StatelessWidget {
-  const _Card({required this.children});
+  const _Card({required this.children, this.footer});
 
   final List<Widget> children;
+
+  /// Placed after the rows without a line of its own (it draws one when it shows).
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -318,14 +359,15 @@ class _Card extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: dark ? c.surfaceStrong : Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26), side: BorderSide(color: c.line)),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) Divider(height: 1, indent: 52, endIndent: 16, color: c.line),
+            if (i > 0) Divider(height: 1, color: c.line),
             children[i],
           ],
+          ?footer,
         ],
       ),
     );
@@ -347,15 +389,15 @@ class _Row extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
         child: Row(
           children: [
-            Icon(icon, size: 21, color: color ?? c.text),
-            const SizedBox(width: 15),
+            Icon(icon, size: 24, color: color ?? c.text),
+            const SizedBox(width: 16),
             Expanded(
-              child: Text(label, style: TextStyle(color: color ?? c.text, fontSize: 15.5)),
+              child: Text(label, style: TextStyle(color: color ?? c.text, fontSize: 17)),
             ),
-            if (chevron) Icon(Icons.chevron_right, size: 20, color: c.faint),
+            if (chevron) Icon(Icons.chevron_right, size: 22, color: c.faint),
           ],
         ),
       ),
@@ -456,15 +498,26 @@ class _RoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Palette.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // A raised white circle, like ChatGPT's.
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: CircleBorder(side: BorderSide(color: c.line)),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox.square(dimension: 40, child: Icon(icon, size: 20, color: c.text)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: dark ? c.surfaceStrong : Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 14, offset: const Offset(0, 3)),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(dimension: 48, child: Icon(icon, size: 24, color: c.text)),
+          ),
         ),
       ),
     );

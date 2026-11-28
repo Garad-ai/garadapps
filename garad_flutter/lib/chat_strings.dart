@@ -308,6 +308,22 @@ class ChatStrings {
   String get about => isSomali ? 'Ku saabsan' : 'About';
   String get version => isSomali ? 'Nooca' : 'Version';
 
+  // Editing the latest question (ChatGPT's "Edit message").
+  String get editMessage => isSomali ? 'Wax ka beddel fariinta' : 'Edit message';
+
+  // garad.ai's top switch (paid plans): the chat, or the AI Toolkit (website wording).
+  String get chatTab => isSomali ? 'Wada-hadal' : 'Chat';
+  String get toolkitTab => isSomali ? 'Qalabka AI' : 'AI Toolkit';
+
+  // Temporary chat (ChatGPT's): not kept in the history.
+  String get temporaryChat => isSomali ? 'Sheeko ku-meel-gaar ah' : 'Temporary chat';
+  String get temporaryChatInfo =>
+      isSomali ? 'Sheekadan kuma muuqan doonto taariikhda.' : 'This chat won’t appear in history.';
+  String get temporaryOn => isSomali
+      ? 'Sheeko ku-meel-gaar ah: lama kaydin doono.'
+      : 'Temporary chat on: it won’t be saved.';
+  String get temporaryOff => isSomali ? 'Sheeko caadi ah.' : 'Temporary chat off.';
+
   // Deleting a chat: the confirmation's title and what happens.
   String get deleteChatTitle => isSomali ? 'Sheekada ma tirtirtaa?' : 'Delete chat?';
   String deleteChatMessage(String title) => isSomali

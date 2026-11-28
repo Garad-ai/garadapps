@@ -29,6 +29,7 @@ import '../theme.dart';
 import '../widgets/model_picker.dart';
 import '../widgets/reminder_card.dart';
 import '../widgets/task_card.dart';
+import '../widgets/temporary_chat_icon.dart';
 import 'chat_drawer.dart';
 import 'document_screen.dart';
 import 'image_edit_screen.dart';
@@ -38,6 +39,9 @@ import 'camera_capture_screen.dart';
 import 'library_screen.dart';
 import 'auth_sheet.dart';
 import 'billing_screen.dart';
+import 'live_video_screen.dart';
+import 'image_studio_screen.dart';
+import 'toolkit_screen.dart';
 import 'scheduled_screen.dart';
 import 'voice_mode_screen.dart';
 import 'welcome_screen.dart';
@@ -101,9 +105,95 @@ class _ChatScreenState extends State<ChatScreen> {
 
   GaradApi get _api => context.read<AuthState>().api;
 
+  // ---- Temporary chat (ChatGPT's): not in the history, deleted when the user leaves it ----
+
+  /// The next new chat is temporary (the toggle at the top right of an empty chat).
+  bool _temporary = false;
+
+  /// The temporary chat on screen, once it has been created on the server.
+  int? _temporaryChatId;
+
+  /// Kept for deleting the temporary chat from [dispose], where the context can no longer be read.
+  GaradApi? _temporaryApi;
+
+  static const _pendingTemporaryKey = 'garad_temporary_chat';
+
+  // ---- Chat | AI Toolkit (paid plans, like garad.ai) ----
+
+  /// Showing the AI Toolkit instead of the chat.
+  bool _toolkit = false;
+
+  /// A paid plan: the top bar has the website's "Chat | AI Toolkit" switch.
+  bool get _hasPlan => !(context.read<AuthState>().user?.guest ?? true) && _api.cachedBilling?.planName != null;
+
+  /// A tool from the AI Toolkit: the Image Generator now; Audio Studio and Social Media come next.
+  void _openTool(String tool) {
+    if (tool == 'image' || tool == 'video') {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ImageStudioScreen()));
+      return;
+    }
+    _snack(chatStrings.isSomali ? 'Qalabkan dhawaan ayuu app-ka ku iman doonaa.' : 'This tool is coming to the app soon.');
+  }
+
+  /// The plan is checked once at start (it is also refreshed by Settings and Billing).
+  Future<void> _loadPlan() async {
+    if (context.read<AuthState>().user?.guest ?? true) return;
+    try {
+      await _api.billing();
+      if (mounted) setState(() {});
+    } on ApiException {
+      // Offline: the switch shows once the plan is known.
+    }
+  }
+
+  void _toggleTemporary() {
+    // The empty chat itself says "Temporary chat · This chat won't appear in history" (no pop-up).
+    setState(() => _temporary = !_temporary);
+  }
+
+  /// A chat was just created: a temporary one is remembered only to be deleted (also after a crash).
+  void _chatCreated(int id) {
+    if (_temporary) {
+      _temporaryChatId = id;
+      _temporaryApi = _api;
+      _storage.write(key: _pendingTemporaryKey, value: '$id').catchError((_) {});
+    } else {
+      _rememberChat(id);
+    }
+  }
+
+  /// Leaving the temporary chat (another chat, a new chat, the app closing): it is deleted, here and on
+  /// garad.ai, so it never appears in the history.
+  void _leaveTemporaryChat() {
+    final id = _temporaryChatId;
+    final api = _temporaryApi;
+    _temporaryChatId = null;
+    _temporaryApi = null;
+    _temporary = false;
+    if (id == null || api == null) return;
+    api.cachedConversations.remove(id);
+    api.deleteConversation(id).then((_) => _storage.delete(key: _pendingTemporaryKey)).catchError((_) {});
+  }
+
+  /// A temporary chat left behind when the app was closed: delete it now.
+  Future<void> _deleteLeftoverTemporaryChat() async {
+    try {
+      final id = int.tryParse(await _storage.read(key: _pendingTemporaryKey) ?? '');
+      if (id == null || !mounted) return;
+      await _api.deleteConversation(id);
+      await _storage.delete(key: _pendingTemporaryKey);
+    } catch (_) {
+      // Try again next time.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deleteLeftoverTemporaryChat();
+      _loadPlan();
+    });
     _handledVoiceRequest = context.read<AppState>().voiceRequest;
     _bindTts();
     // Browsers: a pasted image (Ctrl+V / ⌘V, e.g. a screenshot) is added to the message.
@@ -121,6 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _leaveTemporaryChat();
     _stopPasteListener();
     _poll?.cancel();
     _reply?.cancel();
@@ -164,6 +255,9 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Shows a chat from the menu, or a fresh one when [chat] is null.
   /// [restoring]: reopening the last chat at start-up; if it is gone, quietly start a new chat.
   Future<void> _openConversation(ConversationSummary? chat, {bool restoring = false}) async {
+    // Leaving a temporary chat deletes it; the next new chat is a normal one again.
+    if (_temporaryChatId != null && chat?.id != _temporaryChatId) _leaveTemporaryChat();
+    if (chat != null) _temporary = false;
     await _reply?.cancel();
     await _tts.stop();
     // Seen before: show the last copy straight away, then refresh it below.
@@ -179,7 +273,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _loading = chat != null && cached == null;
     });
     if (cached != null) _scrollToEnd(jump: true);
-    _rememberChat(chat?.id);
+    if (chat?.id == null || chat?.id != _temporaryChatId) _rememberChat(chat?.id);
     if (chat == null) return;
     try {
       final result = await _api.conversation(chat.id);
@@ -390,7 +484,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_conversationId == null) {
         final created = await _api.createConversation();
         _conversationId = created.id;
-        _rememberChat(created.id);
+        _chatCreated(created.id);
       }
       // Photos and documents have been uploading since they were added; usually they are done by now.
       if (photos.isNotEmpty) images = [...images, ...await Future.wait(photos.map((a) => a.reference))];
@@ -410,10 +504,7 @@ class _ChatScreenState extends State<ChatScreen> {
           withCorrectedFileWords(content),
           // Slides are built on Claude: a deck asked for on DeepSeek/GPT/Gemini goes with Claude Haiku.
           model:
-              model ??
-              (images.isEmpty
-                  ? claudeModelForSlides(content, _models, _modelId) ?? _modelId
-                  : _visionModelId),
+              model ?? (images.isEmpty ? claudeModelForSlides(content, _models, _modelId) ?? _modelId : _visionModelId),
           webSearch: _webSearch,
           images: images,
           // Only voice mode follows the answer as it streams.
@@ -527,6 +618,10 @@ class _ChatScreenState extends State<ChatScreen> {
             _callHistory.clear();
             _openConversation(null);
           },
+          // 📹 is Garad Live: real-time video on Gemini Live (free minutes a day, then credits).
+          onLiveVideo: () =>
+              Navigator.of(context)
+                  .push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => const LiveVideoScreen())),
         ),
         transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
       ),
@@ -596,7 +691,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_conversationId == null) {
         final created = await _api.createConversation();
         _conversationId = created.id;
-        _rememberChat(created.id);
+        _chatCreated(created.id);
       }
     } on ApiException catch (e) {
       return VoiceReply.failed(e.message);
@@ -714,8 +809,38 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---- Answer actions (copy · 👍 · 👎 · read aloud · regenerate · share · ⋯) ----
 
+  /// Edit the latest question (ChatGPT's "Edit message"): change its words, and Garad answers the new
+  /// question in place of the old answer. On failure both come back as they were.
+  Future<void> _editQuestion(ChatMessage question) async {
+    final index = _messages.indexOf(question);
+    final answer = index >= 0 && index + 1 < _messages.length ? _messages[index + 1] : null;
+    if (answer == null || answer.isUser || _sending) return;
+    final edited = await _askEditedText(question.shownText);
+    if (edited == null || !mounted) return;
+    // The same words: Send asks again (a new answer), like ChatGPT. Doing nothing looked broken.
+    if (edited == question.content.trim()) return _regenerate(answer);
+    final before = question.content;
+    setState(() => question.content = edited);
+    await _regenerate(answer, prompt: edited, onFailed: () => question.content = before);
+  }
+
+  /// The edit box: the question's words, ready to change; null when cancelled.
+  Future<String?> _askEditedText(String current) {
+    final c = Palette.of(context);
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: c.background,
+      // The sheet owns its text controller, so it is let go only once the sheet is fully gone (disposing
+      // it as soon as the sheet started closing broke Flutter's checks: the red '_dependents' screen).
+      builder: (_) => _EditSheet(initial: current),
+    );
+  }
+
   /// A new answer to the latest question, replacing [bubble]. On failure the old answer comes back.
-  Future<void> _regenerate(ChatMessage bubble) async {
+  /// [prompt]: the question was edited to these words ([onFailed] puts the old words back).
+  Future<void> _regenerate(ChatMessage bubble, {String? prompt, VoidCallback? onFailed}) async {
     final chatId = _conversationId;
     final messageId = bubble.id;
     if (_sending || chatId == null || messageId == null) return;
@@ -726,6 +851,7 @@ class _ChatScreenState extends State<ChatScreen> {
     void restore(String error) {
       if (!mounted) return;
       setState(() {
+        onFailed?.call();
         bubble
           ..content = oldContent
           ..modelName = oldModel
@@ -749,7 +875,7 @@ class _ChatScreenState extends State<ChatScreen> {
       bubble.workSteps.clear();
     });
     _reply = _api
-        .regenerate(chatId, messageId, model: _modelId)
+        .regenerate(chatId, messageId, model: _modelId, prompt: prompt)
         .listen(
           (event) {
             if (event is ReplyFailed) {
@@ -1070,7 +1196,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// What ＋ → Files offers: the documents the website's chat reads, and pictures.
   static const _fileTypes = [
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json', 'md', 'html', 'xml', //
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'ppt',
+    'pptx',
+    'txt',
+    'csv',
+    'json',
+    'md',
+    'html',
+    'xml', //
     'png', 'jpg', 'jpeg', 'webp', 'gif',
   ];
   static const _maxFiles = 5;
@@ -1113,6 +1251,15 @@ class _ChatScreenState extends State<ChatScreen> {
   /// ＋ : a floating menu just above the button, ChatGPT style (not a sheet from the bottom).
   Future<void> _plusMenu() async {
     FocusScope.of(context).unfocus(); // the keyboard goes down, like ChatGPT
+    // Measure the message box only once the keyboard is down: measured while it was still up, the menu
+    // stayed high above the box with an empty gap under it.
+    // (Read from the window itself: MediaQuery.of here, outside build, made Flutter's debug check fail.)
+    bool keyboardUp() => WidgetsBinding.instance.platformDispatcher.views.any((v) => v.viewInsets.bottom > 0);
+    for (var i = 0; i < 20 && mounted && keyboardUp(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     final box = _composerKey.currentContext?.findRenderObject() as RenderBox?;
     final screen = MediaQuery.sizeOf(context);
     final top = box?.localToGlobal(Offset.zero).dy ?? screen.height - 140;
@@ -1314,10 +1461,11 @@ class _ChatScreenState extends State<ChatScreen> {
       onPasteImage: (bytes) {
         if (!(user?.guest ?? false)) _attach(bytes);
       },
-      // Not logged in: one Claude model, chosen by the server — no model pill. Talk asks them to log in.
-      modelName: (user?.guest ?? false) ? null : model?.shortName,
       canTalk: true,
       webSearch: _webSearch,
+      hint: _temporary ? chatStrings.temporaryChat : null,
+      // With the Chat | AI Toolkit switch in the top bar, the model is chosen in the message box.
+      modelName: _hasPlan ? model?.shortName : null,
       onModel: _modelMenu,
     );
     // A round icon button in the corners of the top bar (Claude / ChatGPT style).
@@ -1343,6 +1491,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: c.background,
       drawer: ChatDrawer(
         currentId: _conversationId,
+        hiddenId: _temporaryChatId,
         onSelect: _openConversation,
         onChanged: _chatChanged,
         onOpenScheduled: () => _openScheduled(),
@@ -1377,155 +1526,237 @@ class _ChatScreenState extends State<ChatScreen> {
                 builder: (context) =>
                     roundButton(Icons.notes_rounded, chatStrings.menu, () => Scaffold.of(context).openDrawer()),
               ),
+        // Paid plans: garad.ai's "Chat | AI Toolkit" switch in the middle (the model moves into the
+        // message box, as on the website). Otherwise the model, ChatGPT-style, next to the menu (not for
+        // guests: the server picks).
+        titleSpacing: 4,
+        centerTitle: _hasPlan,
+        title: _hasPlan
+            ? _WorkspaceSwitch(toolkit: _toolkit, onChanged: (on) => setState(() => _toolkit = on))
+            : (user?.guest ?? false) || model == null
+            ? null
+            : Align(
+                alignment: Alignment.centerLeft,
+                child: _ModelButton(name: model.shortName, onTap: _modelMenu),
+              ),
         actions: [
           if (user?.guest ?? false)
             Builder(
               builder: (context) =>
                   roundButton(Icons.more_horiz, chatStrings.menu, () => Scaffold.of(context).openDrawer()),
+            )
+          // Temporary chat on an empty chat, like ChatGPT: a raised white circle with the dashed bubble
+          // (✓ inside while on). Not in the AI Toolkit.
+          else if (_messages.isEmpty && !_loading && !(_toolkit && _hasPlan))
+            Padding(
+              padding: const EdgeInsets.all(6),
+              child: Tooltip(
+                message: chatStrings.temporaryChat,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark ? c.surfaceStrong : Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 14,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _toggleTemporary,
+                      child: SizedBox.square(
+                        dimension: 46,
+                        child: Center(
+                          child: TemporaryChatIcon(on: _temporary, color: c.text, size: 25),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          // In a temporary chat: a small "Temporary" label, so it is clear it will not be kept.
+          else if (_temporaryChatId != null && _temporaryChatId == _conversationId)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(999)),
+                  child: Text(
+                    chatStrings.temporaryChat,
+                    style: TextStyle(color: c.brand, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
             ),
         ],
       ),
-      body: Builder(
-        builder: (context) {
-          // An app rewritten later in the chat ("make it blue") is its next version, like Claude.
-          final appVersions = List.filled(_messages.length, 1);
-          final seen = <String, int>{};
-          for (var i = 0; i < _messages.length; i++) {
-            if (_messages[i].isUser) continue;
-            final title = appTitleIn(_messages[i].content);
-            if (title != null) appVersions[i] = seen[title] = (seen[title] ?? 0) + 1;
-          }
-          return SafeArea(
-            top: false,
-            child: empty
-                ? Column(
-                    children: [
-                      Expanded(
-                        child: _Welcome(
-                          greeting: chatStrings.greeting(
-                            (user?.guest ?? false) ? '' : user?.name ?? '',
-                            DateTime.now(),
-                          ),
-                        ),
-                      ),
-                      Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 10), child: composer),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Expanded(
-                        child: _loading
-                            ? const Center(child: CircularProgressIndicator())
-                            : LayoutBuilder(
-                                builder: (context, box) {
-                                  Widget bubble(int i) => _Bubble(
-                                    appVersion: appVersions[i],
-                                    // Changes asked for in an app's preview are sent as the next message.
-                                    onAppChange: _sending ? null : (change) => _send(change),
-                                    message: _messages[i],
-                                    streaming: _sending && i == _messages.length - 1,
-                                    onOpenTask: (task) => _openScheduled(highlightId: task.id),
-                                    onOpenReminder: (id) => _openScheduled(highlightId: id),
-                                    speaking: _speaking == _messages[i],
-                                    onToggleSpeak: () => _toggleSpeak(_messages[i]),
-                                    onFeedback: (value) => _feedback(_messages[i], value),
-                                    onShare: () => _shareMessage(_messages[i]),
-                                    onMore: () => _moreActions(_messages[i]),
-                                    // Only the latest answer can be regenerated (as in ChatGPT).
-                                    onRegenerate: !_sending && i == _messages.length - 1 && _messages[i].id != null
-                                        ? () => _regenerate(_messages[i])
-                                        : null,
-                                    // A question card can be answered while it is the latest message.
-                                    onChoose: !_sending && i == _messages.length - 1 ? (answer) => _send(answer) : null,
-                                    onEditImage: _sending ? null : _editImage,
-                                    chosen: i + 1 < _messages.length && _messages[i + 1].isUser
-                                        ? _messages[i + 1].content
-                                        : null,
-                                  );
-                                  // Like ChatGPT: the question just asked and its answer fill at least one
-                                  // screen, so the question can stand at the top while the answer is written
-                                  // below it — the screen does not move until the user scrolls.
-                                  final n = _messages.length;
-                                  final pinned =
-                                      _pinLatestTurn && n >= 2 && !_messages[n - 1].isUser && _messages[n - 2].isUser;
-                                  final count = pinned ? n - 1 : n;
-                                  return NotificationListener<Notification>(
-                                    onNotification: _onListScroll,
-                                    child: Stack(
-                                      children: [
-                                        ListView.builder(
-                                          controller: _scroll,
-                                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                                          itemCount: count,
-                                          itemBuilder: (context, i) => pinned && i == count - 1
-                                              ? ConstrainedBox(
-                                                  constraints: BoxConstraints(
-                                                    minHeight: math.max(0, box.maxHeight - 24),
-                                                  ),
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [bubble(i), bubble(i + 1)],
-                                                  ),
-                                                )
-                                              : bubble(i),
-                                        ),
-                                        // ↓ : more of the chat below (ChatGPT's round arrow). It fades and
-                                        // slides in and out instead of popping.
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: 10,
-                                          child: IgnorePointer(
-                                            ignoring: !_moreBelow,
-                                            child: AnimatedSlide(
-                                              offset: _moreBelow ? Offset.zero : const Offset(0, 0.4),
-                                              duration: const Duration(milliseconds: 220),
-                                              curve: Curves.easeOutCubic,
-                                              child: AnimatedOpacity(
-                                                opacity: _moreBelow ? 1 : 0,
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                                child: Center(
-                                                  child: Material(
-                                                    color: Theme.of(context).colorScheme.surface,
-                                                    elevation: 3,
-                                                    shape: CircleBorder(
-                                                      side: BorderSide(color: Palette.of(context).line),
-                                                    ),
-                                                    child: InkWell(
-                                                      customBorder: const CircleBorder(),
-                                                      onTap: () => _scrollToEnd(),
-                                                      child: SizedBox.square(
-                                                        dimension: 40,
-                                                        child: Icon(
-                                                          Icons.arrow_downward_rounded,
-                                                          size: 20,
-                                                          color: Palette.of(context).text,
+      // AI Toolkit (paid plans): the creative tools instead of the chat.
+      body: _toolkit && _hasPlan
+          ? ToolkitScreen(onOpenTool: _openTool)
+          : Builder(
+              builder: (context) {
+                // An app rewritten later in the chat ("make it blue") is its next version, like Claude.
+                final appVersions = List.filled(_messages.length, 1);
+                final seen = <String, int>{};
+                for (var i = 0; i < _messages.length; i++) {
+                  if (_messages[i].isUser) continue;
+                  final title = appTitleIn(_messages[i].content);
+                  if (title != null) appVersions[i] = seen[title] = (seen[title] ?? 0) + 1;
+                }
+                return SafeArea(
+                  top: false,
+                  child: empty
+                      ? Column(
+                          children: [
+                            Expanded(
+                              child: _Welcome(
+                                temporary: _temporary,
+                                greeting: chatStrings.greeting(
+                                  (user?.guest ?? false) ? '' : user?.name ?? '',
+                                  DateTime.now(),
+                                ),
+                              ),
+                            ),
+                            Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 10), child: composer),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            Expanded(
+                              child: _loading
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : LayoutBuilder(
+                                      builder: (context, box) {
+                                        Widget bubble(int i) => _Bubble(
+                                          appVersion: appVersions[i],
+                                          // Changes asked for in an app's preview are sent as the next message.
+                                          onAppChange: _sending ? null : (change) => _send(change),
+                                          message: _messages[i],
+                                          streaming: _sending && i == _messages.length - 1,
+                                          onOpenTask: (task) => _openScheduled(highlightId: task.id),
+                                          onOpenReminder: (id) => _openScheduled(highlightId: id),
+                                          speaking: _speaking == _messages[i],
+                                          onToggleSpeak: () => _toggleSpeak(_messages[i]),
+                                          onFeedback: (value) => _feedback(_messages[i], value),
+                                          onShare: () => _shareMessage(_messages[i]),
+                                          onMore: () => _moreActions(_messages[i]),
+                                          // Only the latest answer can be regenerated (as in ChatGPT).
+                                          onRegenerate:
+                                              !_sending && i == _messages.length - 1 && _messages[i].id != null
+                                              ? () => _regenerate(_messages[i])
+                                              : null,
+                                          // Only the latest question can be edited (its answer is replaced).
+                                          onEdit:
+                                              !_sending &&
+                                                  _messages[i].isUser &&
+                                                  i == _messages.length - 2 &&
+                                                  _messages[i + 1].id != null
+                                              ? () => _editQuestion(_messages[i])
+                                              : null,
+                                          // A question card can be answered while it is the latest message.
+                                          onChoose: !_sending && i == _messages.length - 1
+                                              ? (answer) => _send(answer)
+                                              : null,
+                                          onEditImage: _sending ? null : _editImage,
+                                          chosen: i + 1 < _messages.length && _messages[i + 1].isUser
+                                              ? _messages[i + 1].content
+                                              : null,
+                                        );
+                                        // Like ChatGPT: the question just asked and its answer fill at least one
+                                        // screen, so the question can stand at the top while the answer is written
+                                        // below it — the screen does not move until the user scrolls.
+                                        final n = _messages.length;
+                                        final pinned =
+                                            _pinLatestTurn &&
+                                            n >= 2 &&
+                                            !_messages[n - 1].isUser &&
+                                            _messages[n - 2].isUser;
+                                        final count = pinned ? n - 1 : n;
+                                        return NotificationListener<Notification>(
+                                          onNotification: _onListScroll,
+                                          child: Stack(
+                                            children: [
+                                              ListView.builder(
+                                                controller: _scroll,
+                                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                                itemCount: count,
+                                                itemBuilder: (context, i) => pinned && i == count - 1
+                                                    ? ConstrainedBox(
+                                                        constraints: BoxConstraints(
+                                                          minHeight: math.max(0, box.maxHeight - 24),
+                                                        ),
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [bubble(i), bubble(i + 1)],
+                                                        ),
+                                                      )
+                                                    : bubble(i),
+                                              ),
+                                              // ↓ : more of the chat below (ChatGPT's round arrow). It fades and
+                                              // slides in and out instead of popping.
+                                              Positioned(
+                                                left: 0,
+                                                right: 0,
+                                                bottom: 10,
+                                                child: IgnorePointer(
+                                                  ignoring: !_moreBelow,
+                                                  child: AnimatedSlide(
+                                                    offset: _moreBelow ? Offset.zero : const Offset(0, 0.4),
+                                                    duration: const Duration(milliseconds: 220),
+                                                    curve: Curves.easeOutCubic,
+                                                    child: AnimatedOpacity(
+                                                      opacity: _moreBelow ? 1 : 0,
+                                                      duration: const Duration(milliseconds: 220),
+                                                      curve: Curves.easeOut,
+                                                      child: Center(
+                                                        child: Material(
+                                                          color: Theme.of(context).colorScheme.surface,
+                                                          elevation: 3,
+                                                          shape: CircleBorder(
+                                                            side: BorderSide(color: Palette.of(context).line),
+                                                          ),
+                                                          child: InkWell(
+                                                            customBorder: const CircleBorder(),
+                                                            onTap: () => _scrollToEnd(),
+                                                            child: SizedBox.square(
+                                                              dimension: 40,
+                                                              child: Icon(
+                                                                Icons.arrow_downward_rounded,
+                                                                size: 20,
+                                                                color: Palette.of(context).text,
+                                                              ),
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
+                                            ],
                                           ),
-                                        ),
-                                      ],
+                                        );
+                                      },
                                     ),
-                                  );
-                                },
-                              ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                        child: Column(children: [composer, disclaimer]),
-                      ),
-                    ],
-                  ),
-          );
-        },
-      ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                              child: Column(children: [composer, disclaimer]),
+                            ),
+                          ],
+                        ),
+                );
+              },
+            ),
     );
   }
 }
@@ -1589,32 +1820,58 @@ class _Attachment {
 
 /// The empty new-chat screen, Claude-style: the Garad logo and a greeting, centred.
 class _Welcome extends StatelessWidget {
-  const _Welcome({required this.greeting});
+  const _Welcome({required this.greeting, this.temporary = false});
 
   final String greeting;
+
+  /// A temporary chat: ChatGPT's "Temporary chat · This chat won't appear in history."
+  final bool temporary;
 
   @override
   Widget build(BuildContext context) {
     final c = Palette.of(context);
+    if (temporary) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                chatStrings.temporaryChat,
+                style: TextStyle(color: c.text, fontSize: 19, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                chatStrings.temporaryChatInfo,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.muted, fontSize: 15.5, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // Like garad.ai: a bold greeting, and under it one short line at a time that changes every 4 s.
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/images/splash-icon.png', height: 40, semanticLabel: 'Garad AI'),
-            const SizedBox(height: 14),
             Text(
               greeting,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'serif',
-                fontFamilyFallback: const ['Georgia', 'Times New Roman', 'Noto Serif'],
                 fontSize: 26,
+                fontWeight: FontWeight.w700,
                 color: c.text,
-                letterSpacing: -0.3,
+                letterSpacing: -0.6,
+                height: 1.2,
               ),
             ),
+            const SizedBox(height: 8),
+            const _Encouragement(),
           ],
         ),
       ),
@@ -1622,10 +1879,87 @@ class _Welcome extends StatelessWidget {
   }
 }
 
-/// The message bar, Claude-style: a rounded box with the text on top and, under it,
-/// ＋ · model pill (· 🌐 when web search is on) … 🎤 · voice.
-/// 🎤 and the round voice button open voice mode (the animated orb); the voice button turns into
-/// Send while there is text, and into Stop while Garad is answering.
+/// garad.ai's lines under the greeting, taking turns every 4 seconds: each rises in and fades out
+/// upward (frontend/src/App.tsx, selectedEmptyMessage). With reduced motion, only the first line, still.
+class _Encouragement extends StatefulWidget {
+  const _Encouragement();
+
+  @override
+  State<_Encouragement> createState() => _EncouragementState();
+}
+
+class _EncouragementState extends State<_Encouragement> {
+  int _index = 0;
+  Timer? _timer;
+
+  static List<String> get _lines => chatStrings.isSomali
+      ? const [
+          'Maanta maxaad rabtaa inaad qabato?',
+          'Garad ha kaa caawiyo inaad fikraddaada xigta u beddesho shaqo dhammaystiran.',
+          'Si qoto dheer u baar, si cad wax u samee, oo si dhakhso ah u horumar.',
+          'Mashruucaaga xiga wuxuu ku bilaabmi karaa hal weedh.',
+        ]
+      : const [
+          'What would you like to accomplish today?',
+          'Turn your next idea into finished work with Garad.',
+          'Research deeply, create clearly, and move faster.',
+          'Your next project can start with one sentence.',
+        ];
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      // The phone's "remove animations" setting, read from the platform: MediaQuery.of in a timer
+      // (outside build) broke Flutter's dependency bookkeeping (red "_dependents.isEmpty" screen).
+      final still = WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+      if (mounted && !still) setState(() => _index = (_index + 1) % _lines.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Palette.of(context);
+    final line = _lines[_index];
+    return SizedBox(
+      height: 44,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 650),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        // The new line rises into place from a little below; the old one fades out upward.
+        transitionBuilder: (child, animation) {
+          final incoming = child.key == ValueKey(line);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: Offset(0, incoming ? 0.35 : -0.35), end: Offset.zero).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+        child: Text(
+          line,
+          key: ValueKey(line),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          style: TextStyle(color: c.muted, fontSize: 15, height: 1.45),
+        ),
+      ),
+    );
+  }
+}
+
+/// The message bar, ChatGPT-style: one rounded row — ＋ · the text · (🌐) · 🎤 · one round button.
+/// The round button is Talk (voice call) while the box is empty, Send while there is text, and Stop
+/// while Garad is answering. The model is chosen from the top bar. Dictating shows ✕ · Listening… · ■ · ↑.
 class _Composer extends StatelessWidget {
   const _Composer({
     super.key,
@@ -1640,9 +1974,10 @@ class _Composer extends StatelessWidget {
     required this.onStopListening,
     required this.onPlus,
     required this.onTalk,
-    required this.modelName,
     required this.webSearch,
-    required this.onModel,
+    this.hint,
+    this.modelName,
+    this.onModel,
     required this.attachments,
     required this.onRemoveAttachment,
     required this.onPasteImage,
@@ -1650,6 +1985,10 @@ class _Composer extends StatelessWidget {
     required this.onSendDictation,
     this.canTalk = true,
   });
+
+  /// The model chip in the box (paid plans, whose top bar has Chat | AI Toolkit); null: not shown.
+  final String? modelName;
+  final VoidCallback? onModel;
 
   /// False when not logged in: the round voice-call button becomes a (grey) send button.
   final bool canTalk;
@@ -1668,10 +2007,10 @@ class _Composer extends StatelessWidget {
   /// Opens voice mode.
   final VoidCallback onTalk;
 
-  /// The chosen model's short name, shown in the pill (null while the list loads).
-  final String? modelName;
   final bool webSearch;
-  final VoidCallback onModel;
+
+  /// The placeholder instead of "Ask Garad anything" (e.g. "Temporary chat").
+  final String? hint;
 
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -1692,13 +2031,46 @@ class _Composer extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final pillColor = dark ? c.surfaceStrong : Colors.white;
 
+    Widget field() => TextField(
+      controller: controller,
+      focusNode: focusNode,
+      // Android: an image pasted from the clipboard or picked in the keyboard is added as a photo.
+      contentInsertionConfiguration: ContentInsertionConfiguration(
+        allowedMimeTypes: const ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+        onContentInserted: (content) {
+          final data = content.data;
+          if (data != null) onPasteImage(data);
+        },
+      ),
+      minLines: 1,
+      maxLines: 6,
+      textCapitalization: TextCapitalization.sentences,
+      // While dictating, the words being heard are set apart in the serif font, in italics.
+      style: listening
+          ? TextStyle(fontFamily: serifFont, fontStyle: FontStyle.italic, fontSize: 17, color: c.text, height: 1.4)
+          : TextStyle(fontSize: 16.5, color: c.text),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: listening ? chatStrings.listening : (hint ?? chatStrings.messageHint),
+        hintStyle: TextStyle(color: listening ? c.brand : c.faint, fontSize: 16.5),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
+      ),
+    );
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
       decoration: BoxDecoration(
         color: pillColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.line),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2))],
+        borderRadius: BorderRadius.circular(30),
+        border: dark ? Border.all(color: c.line) : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.25 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1740,38 +2112,7 @@ class _Composer extends StatelessWidget {
                 ),
               ),
             ),
-          TextField(
-            controller: controller,
-            focusNode: focusNode,
-            // Android: an image pasted from the clipboard or picked in the keyboard is added as a photo.
-            contentInsertionConfiguration: ContentInsertionConfiguration(
-              allowedMimeTypes: const ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-              onContentInserted: (content) {
-                final data = content.data;
-                if (data != null) onPasteImage(data);
-              },
-            ),
-            minLines: 1,
-            maxLines: 6,
-            textCapitalization: TextCapitalization.sentences,
-            // While dictating, the words being heard are set apart in the serif font, in italics.
-            style: listening
-                ? TextStyle(
-                    fontFamily: serifFont,
-                    fontStyle: FontStyle.italic,
-                    fontSize: 17,
-                    color: c.text,
-                    height: 1.4,
-                  )
-                : TextStyle(fontSize: 16, color: c.text),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: listening ? chatStrings.listening : chatStrings.messageHint,
-              hintStyle: TextStyle(color: listening ? c.brand : c.faint, fontSize: 16),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
-            ),
-          ),
+          if (listening) field(),
           // Dictating: ✕ · Listening… · ■ stop · ↑ send (the words appear in the box above).
           if (listening)
             Row(
@@ -1810,51 +2151,58 @@ class _Composer extends StatelessWidget {
             )
           else
             Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // ＋ : add to chat (camera, photos, files, web search, scheduled). Not for guests.
-                if (onPlus case final plus?) ...[
-                  _Circle(
-                    color: c.surfaceStrong,
+                // ＋ : add to chat (camera, photos, files, web search, scheduled). Guests are asked to log in.
+                if (onPlus case final plus?)
+                  IconButton(
                     tooltip: chatStrings.more,
-                    onTap: plus,
-                    child: Icon(Icons.add, size: 20, color: c.text),
+                    onPressed: plus,
+                    icon: Icon(Icons.add_rounded, size: 27, color: c.text),
                   ),
-                  const SizedBox(width: 6),
-                ],
-                // The model pill, e.g. "Claude Sonnet 5".
-                if (modelName != null)
-                  Flexible(
-                    child: Material(
-                      color: c.surfaceStrong,
-                      shape: const StadiumBorder(),
-                      child: InkWell(
-                        customBorder: const StadiumBorder(),
-                        onTap: onModel,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                          child: Text(
-                            modelName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: c.text, fontSize: 13.5, fontWeight: FontWeight.w500),
+                Expanded(child: field()),
+                if (webSearch)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12, left: 4),
+                    child: Tooltip(
+                      message: chatStrings.webSearch,
+                      child: Icon(Icons.language, size: 20, color: c.brand),
+                    ),
+                  ),
+                // The model, like the website's message box ("Haiku 5.5 ⌄"), when the top bar has the switch.
+                if (modelName case final name?)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: TextButton(
+                      onPressed: onModel,
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.muted,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 96),
+                            child: Text(
+                              name.replaceFirst(RegExp(r'^Claude\s+'), ''),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+                            ),
                           ),
-                        ),
+                          const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                        ],
                       ),
                     ),
                   ),
-                if (webSearch) ...[
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: chatStrings.webSearch,
-                    child: Icon(Icons.language, size: 20, color: c.brand),
-                  ),
-                ],
-                const Spacer(),
                 // 🎤 dictation: talk, and the words are written in the box (the purple button is a voice call).
                 IconButton(
                   tooltip: chatStrings.dictate,
                   onPressed: sending ? null : onDictate,
-                  icon: Icon(Icons.mic_none, size: 22, color: c.muted),
+                  icon: Icon(Icons.mic_none_rounded, size: 25, color: c.text),
                 ),
                 ValueListenableBuilder<TextEditingValue>(
                   valueListenable: controller,
@@ -1903,7 +2251,179 @@ class _Composer extends StatelessWidget {
   }
 }
 
-/// A 38 px round button inside the message bar.
+/// garad.ai's "Chat | AI Toolkit" switch (frontend WorkspaceNavigation): two segments in a soft pill,
+/// the chosen one raised.
+class _WorkspaceSwitch extends StatelessWidget {
+  const _WorkspaceSwitch({required this.toolkit, required this.onChanged});
+
+  final bool toolkit;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Palette.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    Widget segment(String label, bool selected, bool value) => GestureDetector(
+      onTap: () => onChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? (dark ? c.background : Colors.white) : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: selected
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? c.text : c.muted,
+            fontSize: 14.5,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+    return Semantics(
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: c.surfaceStrong, borderRadius: BorderRadius.circular(999)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [segment(chatStrings.chatTab, !toolkit, false), segment(chatStrings.toolkitTab, toolkit, true)],
+        ),
+      ),
+    );
+  }
+}
+
+/// The model in the top bar, ChatGPT-style: its name and ⌄ in a soft pill; opens the model picker.
+class _ModelButton extends StatelessWidget {
+  const _ModelButton({required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Palette.of(context);
+    return Material(
+      color: c.surfaceStrong,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  name.replaceFirst(RegExp(r'^Claude\s+'), ''),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: c.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Edit message" sheet: the question's words, Cancel and Send (pops with the new words).
+class _EditSheet extends StatefulWidget {
+  const _EditSheet({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_EditSheet> createState() => _EditSheetState();
+}
+
+class _EditSheetState extends State<_EditSheet> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext sheet) {
+    final c = Palette.of(sheet);
+    return Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(sheet).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              chatStrings.editMessage,
+              style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 8,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(color: c.text, fontSize: 16.5),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: c.surfaceStrong,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(sheet),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      foregroundColor: c.text,
+                      side: BorderSide(color: c.line),
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(chatStrings.cancel),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () {
+                      final text = _controller.text.trim();
+                      if (text.isNotEmpty) Navigator.pop(sheet, text);
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: c.brand,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(chatStrings.send),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+  }
+}
+
+/// A 44 px round button inside the message bar.
 class _Circle extends StatelessWidget {
   const _Circle({required this.color, required this.tooltip, required this.onTap, required this.child});
 
@@ -1921,7 +2441,7 @@ class _Circle extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: SizedBox.square(dimension: 38, child: Center(child: child)),
+        child: SizedBox.square(dimension: 44, child: Center(child: child)),
       ),
     ),
   );
@@ -1969,7 +2489,11 @@ class _Bubble extends StatelessWidget {
     this.chosen,
     this.onAppChange,
     this.appVersion = 1,
+    this.onEdit,
   });
+
+  /// Edits this question and asks again (only the latest question; null otherwise).
+  final VoidCallback? onEdit;
 
   /// Sends a change asked for in an app's preview (vibe coding). Null while an answer is coming.
   final ValueChanged<String>? onAppChange;
@@ -2063,6 +2587,22 @@ class _Bubble extends StatelessWidget {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+                ),
+              // The latest question: Copy and Edit under it, like ChatGPT.
+              if (onEdit != null && message.shownText.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ActionIcon(
+                      icon: Icons.copy_outlined,
+                      tooltip: chatStrings.copy,
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: message.shownText));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(chatStrings.copied)));
+                      },
+                    ),
+                    _ActionIcon(icon: Icons.edit_outlined, tooltip: chatStrings.editMessage, onTap: onEdit!),
+                  ],
                 ),
             ],
           ),

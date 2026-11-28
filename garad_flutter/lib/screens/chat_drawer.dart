@@ -23,7 +23,11 @@ class ChatDrawer extends StatefulWidget {
     required this.onOpenLibrary,
     required this.onOpenArtifacts,
     this.onChatsDeleted,
+    this.hiddenId,
   });
+
+  /// A temporary chat: never listed (it is deleted when the user leaves it).
+  final int? hiddenId;
 
   /// Settings → Privacy → Delete all chats happened: start a new chat.
   final VoidCallback? onChatsDeleted;
@@ -208,38 +212,46 @@ class _ChatDrawerState extends State<ChatDrawer> {
     final c = Palette.of(context);
     final user = context.watch<AuthState>().user;
 
-    // Claude-style: "Garad AI" + round search, Library / Scheduled, Pinned, Recents,
-    // and at the bottom the account avatar (Settings) and a Garad-purple "＋ New chat" pill.
+    // ChatGPT-style: the Garad logo and a round search button, a few large menu rows, a line, then the
+    // chats as plain titles. At the bottom, over a soft fade: the purple "New chat" pill and the account.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final raised = dark ? c.surfaceStrong : Colors.white;
+    final shadow = [
+      BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 14, offset: const Offset(0, 3)),
+    ];
     return Drawer(
-      backgroundColor: c.surface,
+      width: MediaQuery.sizeOf(context).width * 0.82,
+      backgroundColor: c.background,
       shape: const RoundedRectangleBorder(),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 12, 6),
+              padding: const EdgeInsets.fromLTRB(22, 10, 16, 10),
               child: Row(
                 children: [
-                  // The Garad logo with its name, instead of plain text.
                   Image.asset('assets/images/wordmark.png', height: 30, fit: BoxFit.contain, semanticLabel: 'Garad AI'),
                   const Spacer(),
                   Tooltip(
                     message: chatStrings.searchChats,
-                    child: Material(
-                      color: Colors.transparent,
-                      shape: CircleBorder(side: BorderSide(color: c.line)),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _openSearch,
-                        child: SizedBox.square(dimension: 40, child: Icon(Icons.search, size: 20, color: c.text)),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: raised, shape: BoxShape.circle, boxShadow: shadow),
+                      child: Material(
+                        color: Colors.transparent,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _openSearch,
+                          child: SizedBox.square(dimension: 46, child: Icon(Icons.search, size: 23, color: c.text)),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             // Library, Artifacts and Scheduled need an account: guests only chat.
             if (!(user?.guest ?? false)) ...[
               _NavRow(
@@ -266,32 +278,72 @@ class _ChatDrawerState extends State<ChatDrawer> {
                   widget.onOpenScheduled();
                 },
               ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 4),
+                child: Divider(height: 1, color: c.line),
+              ),
             ],
-            Expanded(child: _lists(c)),
-            // Bottom: the account avatar (Settings) and a Garad-purple "＋ New chat" pill.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-              child: Row(
+            Expanded(
+              child: Stack(
                 children: [
-                  Tooltip(
-                    message: chatStrings.settings,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: _openSettings,
-                      child: AccountAvatar(name: user?.name ?? ''),
+                  Positioned.fill(child: _lists(c)),
+                  // The list fades out under the buttons, like ChatGPT.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 110,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [c.background.withValues(alpha: 0), c.background.withValues(alpha: 0.92), c.background],
+                            stops: const [0, 0.55, 1],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: () => _select(null),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: c.brand,
-                      foregroundColor: Colors.white,
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  Positioned(
+                    left: 22,
+                    right: 16,
+                    bottom: 14,
+                    child: Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => _select(null),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: c.brand,
+                            foregroundColor: Colors.white,
+                            shape: const StadiumBorder(),
+                            elevation: 2,
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                          ),
+                          icon: const Icon(Icons.edit_square, size: 20),
+                          label: Text(
+                            chatStrings.newChat,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16.5),
+                          ),
+                        ),
+                        const Spacer(),
+                        Tooltip(
+                          message: chatStrings.settings,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: raised, shape: BoxShape.circle, boxShadow: shadow),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _openSettings,
+                              child: Padding(
+                                padding: const EdgeInsets.all(5),
+                                child: AccountAvatar(name: user?.name ?? '', size: 40),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    icon: const Icon(Icons.add, size: 19),
-                    label: Text(chatStrings.newChat, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
                   ),
                 ],
               ),
@@ -331,21 +383,22 @@ class _ChatDrawerState extends State<ChatDrawer> {
         return false;
       },
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(top: 4, bottom: 96),
         children: [
           if (_pinned.isNotEmpty) ...[
             _SectionHeader(label: chatStrings.pinned),
             for (final chat in _pinned) _chatRow(chat, c),
           ],
-          _SectionHeader(label: chatStrings.recents),
+          if (_pinned.isNotEmpty) _SectionHeader(label: chatStrings.recents),
           // A short list first, like ChatGPT; "See all…" shows (and keeps loading) the rest.
-          for (final chat in (_showAll ? _recents : _recents.take(_shortList))) _chatRow(chat, c),
+          for (final chat in (_showAll ? _recents : _recents.take(_shortList)))
+            if (chat.id != widget.hiddenId) _chatRow(chat, c),
           if (!_showAll && (_recents.length > _shortList || _nextPage != null))
             InkWell(
               onTap: () => setState(() => _showAll = true),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-                child: Text(chatStrings.seeAll, style: TextStyle(color: c.muted, fontSize: 14.5)),
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
+                child: Text(chatStrings.seeAll, style: TextStyle(color: c.muted, fontSize: 16)),
               ),
             ),
           if (_recents.isEmpty)
@@ -367,31 +420,24 @@ class _ChatDrawerState extends State<ChatDrawer> {
   Widget _chatRow(ConversationSummary chat, Palette c) {
     final selected = chat.id == widget.currentId;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
       // The Builder's context is this row: its position anchors the menu.
       child: Builder(
         builder: (row) => Material(
           color: selected ? c.surfaceStrong : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           child: InkWell(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             onTap: () => _select(chat),
             onLongPress: () => _actions(chat, row),
+            // Plain titles, like ChatGPT: no icon, a comfortable size.
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 11, 10, 11),
-              child: Row(
-                children: [
-                  ChatBubbleIcon(color: c.text),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      chat.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: c.text, fontSize: 15.5),
-                    ),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+              child: Text(
+                chat.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: c.text, fontSize: 16.5),
               ),
             ),
           ),
@@ -414,12 +460,12 @@ class _NavRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: c.text),
-            const SizedBox(width: 14),
-            Text(label, style: TextStyle(color: c.text, fontSize: 15)),
+            Icon(icon, size: 24, color: c.text),
+            const SizedBox(width: 16),
+            Text(label, style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -435,7 +481,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 16, 14, 6),
-    child: Text(label, style: TextStyle(color: Palette.of(context).muted, fontSize: 13.5)),
+    padding: const EdgeInsets.fromLTRB(22, 14, 14, 6),
+    child: Text(label, style: TextStyle(color: Palette.of(context).muted, fontSize: 14)),
   );
 }
